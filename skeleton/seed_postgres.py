@@ -310,9 +310,38 @@ def seed_national_rail_bookings(cur):
 
 
 def seed_metro_travels(cur):
+    """
+    Seed metro_travel_history table from metro_travel_history.json.
+    Sets missing day_pass_ref and cancelled_at to None.
+    """
     data = load("metro_travel_history.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "trip_id", "user_id", "schedule_id", "origin_station_id",
+        "destination_station_id", "travel_date", "ticket_type", "day_pass_ref",
+        "stops_travelled", "amount_usd", "status", "purchased_at",
+        "travelled_at", "cancelled_at"
+    ]
+    rows = []
+    for t in data:
+        rows.append((
+            t.get("trip_id"),
+            t.get("user_id"),
+            t.get("schedule_id"),
+            t.get("origin_station_id"),
+            t.get("destination_station_id"),
+            t.get("travel_date"),
+            t.get("ticket_type"),
+            t.get("day_pass_ref"),
+            t.get("stops_travelled"),
+            t.get("amount_usd"),
+            t.get("status"),
+            t.get("purchased_at"),
+            t.get("travelled_at"),
+            t.get("cancelled_at")
+        ))
+        
+    inserted = insert_many(cur, "metro_travel_history", columns, rows)
+    print(f"Seeded {inserted} metro travel histories.")
 
 
 def seed_payments(cur):
