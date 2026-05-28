@@ -371,9 +371,26 @@ def seed_payments(cur):
 
 
 def seed_feedback(cur):
+    """
+    Seed feedback table from feedback.json.
+    """
     data = load("feedback.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "feedback_id", "booking_id", "user_id", "rating", "comment", "submitted_at"
+    ]
+    rows = []
+    for f in data:
+        rows.append((
+            f.get("feedback_id"),
+            f.get("booking_id"),
+            f.get("user_id"),
+            f.get("rating"),
+            f.get("comment"),
+            f.get("submitted_at")
+        ))
+        
+    inserted = insert_many(cur, "feedback", columns, rows)
+    print(f"Seeded {inserted} feedback records.")
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
