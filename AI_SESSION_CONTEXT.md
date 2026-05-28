@@ -230,8 +230,8 @@ registered_users
 
 ## Agreed Graph Schema
 
-> **Status: PROPOSED by Antigravity AI on 2026-05-28 — pending team vote.**
-> 蔣組員 must confirm or counter-propose before implementing `seed_neo4j.py`.
+> **Status: CONFIRMED 2026-05-28 — voted by 蔣組員 + Antigravity AI.**
+> Q1 single Station label ✓ | Q2 CONNECTS_TO + network property ✓ | Q3 INTERCHANGE_WITH as edge ✓
 
 ```
 Node labels:
@@ -326,7 +326,7 @@ def query_station_connections(station_id: str) -> list[dict]: ...
 - [x] **2026-05-28** Password storage: `registered_users.password` stores **bcrypt hash only**. Never seed plaintext. Use `bcrypt.hashpw()` in `seed_postgres.py`.
 - [x] **2026-05-28** `travel_time_from_origin` stored as **JSONB map** `{"station_id": minutes}` — not a separate table. Rationale: read-only lookup, no joins needed, JSON key is station_id.
 - [x] **2026-05-28** `stops_in_order` and `lines` stored as **`VARCHAR(10)[]`** — queried with `@>` (contains) and `array_position()`. Avoids a junction table for ordered stop lists.
-- [ ] **PENDING** Graph schema Q1/Q2/Q3 — awaiting 蔣組員 vote (see Agreed Graph Schema section)
+- [x] **2026-05-28** Graph schema confirmed: single `Station` label, `CONNECTS_TO {line, travel_time_min, network}`, `INTERCHANGE_WITH` as explicit bidirectional edges. Stats: 30 nodes (15 metro + 15 NR), 66 edges (36 metro + 26 NR CONNECTS_TO + 4 INTERCHANGE_WITH).
 
 ## Prompts That Worked
 
