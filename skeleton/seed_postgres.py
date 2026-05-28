@@ -56,10 +56,28 @@ def insert_many(cur, table, columns, rows):
 # ── seeders ──────────────────────────────────────────────────────────────────
 
 def seed_metro_stations(cur):
+    """
+    Seed metro_stations table from metro_stations.json.
+    Ignores adjacent_stations. Sets interchange_nr_station_id = None to avoid circular FK.
+    """
     data = load("metro_stations.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    # Each item in `data` is a dict — inspect the JSON to see available fields.
-    pass
+    columns = [
+        "station_id", "name", "lines", "is_interchange_metro", 
+        "is_interchange_national_rail", "interchange_nr_station_id"
+    ]
+    rows = []
+    for s in data:
+        rows.append((
+            s.get("station_id"),
+            s.get("name"),
+            s.get("lines", []),
+            s.get("is_interchange_metro", False),
+            s.get("is_interchange_national_rail", False),
+            None  # Set to None initially due to circular dependency
+        ))
+        
+    inserted = insert_many(cur, "metro_stations", columns, rows)
+    print(f"Seeded {inserted} metro stations.")
 
 
 def seed_national_rail_stations(cur):
