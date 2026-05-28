@@ -166,9 +166,46 @@ def seed_metro_schedules(cur):
 
 
 def seed_national_rail_schedules(cur):
+    """
+    Seed national_rail_schedules table from national_rail_schedules.json.
+    Flattens fare_classes and converts travel_time_from_origin_min dict to JSONB string.
+    Sets passed_through_stations = None.
+    """
     data = load("national_rail_schedules.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "schedule_id", "line", "service_type", "direction", "origin_station_id", 
+        "destination_station_id", "stops_in_order", "passed_through_stations", 
+        "travel_time_from_origin", "first_train_time", "last_train_time", 
+        "frequency_min", "operates_on", "std_base_fare_usd", "std_per_stop_rate_usd", 
+        "first_base_fare_usd", "first_per_stop_rate_usd"
+    ]
+    rows = []
+    for s in data:
+        fare_std = s.get("fare_classes", {}).get("standard", {})
+        fare_first = s.get("fare_classes", {}).get("first", {})
+        
+        rows.append((
+            s.get("schedule_id"),
+            s.get("line"),
+            s.get("service_type"),
+            s.get("direction"),
+            s.get("origin_station_id"),
+            s.get("destination_station_id"),
+            s.get("stops_in_order", []),
+            None,
+            json.dumps(s.get("travel_time_from_origin_min", {})),
+            s.get("first_train_time"),
+            s.get("last_train_time"),
+            s.get("frequency_min"),
+            s.get("operates_on", []),
+            fare_std.get("base_fare_usd"),
+            fare_std.get("per_stop_rate_usd"),
+            fare_first.get("base_fare_usd"),
+            fare_first.get("per_stop_rate_usd")
+        ))
+        
+    inserted = insert_many(cur, "national_rail_schedules", columns, rows)
+    print(f"Seeded {inserted} national rail schedules.")
 
 
 def seed_seat_layouts(cur):
