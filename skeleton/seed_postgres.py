@@ -132,9 +132,37 @@ def update_metro_interchange(cur):
 
 
 def seed_metro_schedules(cur):
+    """
+    Seed metro_schedules table from metro_schedules.json.
+    Converts travel_time_from_origin_min dict to JSON string for the JSONB column.
+    """
     data = load("metro_schedules.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "schedule_id", "line", "direction", "origin_station_id", 
+        "destination_station_id", "stops_in_order", "travel_time_from_origin", 
+        "first_train_time", "last_train_time", "frequency_min", 
+        "operates_on", "base_fare_usd", "per_stop_rate_usd"
+    ]
+    rows = []
+    for s in data:
+        rows.append((
+            s.get("schedule_id"),
+            s.get("line"),
+            s.get("direction"),
+            s.get("origin_station_id"),
+            s.get("destination_station_id"),
+            s.get("stops_in_order", []),
+            json.dumps(s.get("travel_time_from_origin_min", {})),
+            s.get("first_train_time"),
+            s.get("last_train_time"),
+            s.get("frequency_min"),
+            s.get("operates_on", []),
+            s.get("base_fare_usd"),
+            s.get("per_stop_rate_usd")
+        ))
+        
+    inserted = insert_many(cur, "metro_schedules", columns, rows)
+    print(f"Seeded {inserted} metro schedules.")
 
 
 def seed_national_rail_schedules(cur):
