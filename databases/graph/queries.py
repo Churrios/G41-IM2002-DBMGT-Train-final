@@ -68,6 +68,14 @@ def query_shortest_route(
         dict with keys: found, origin_id, destination_id,
                         total_time_min, path (list of station dicts), legs
     """
+    # --- CYPHER HINT ---
+    # MATCH (o:Station {station_id: $origin_id}), (d:Station {station_id: $dest_id})
+    # CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min')
+    # YIELD path, weight
+    # RETURN [node in nodes(path) | {station_id: node.station_id, name: node.name}] AS stations,
+    #        [rel in relationships(path) | {line: rel.line, travel_time_min: rel.travel_time_min}] AS legs,
+    #        weight AS total_time_min
+    # → wrap in {"found": bool, "total_time_min": weight, "path": stations, "legs": legs}
     raise NotImplementedError("TODO: implement after designing your graph schema")
 
 
@@ -91,6 +99,12 @@ def query_cheapest_route(
     Returns:
         dict with found, total_fare_usd (approximate), stations, legs
     """
+    # --- CYPHER HINT ---
+    # 注意：fare 不存在 edge 上，需用 travel_time_min 作為 proxy
+    # 或者：從 PostgreSQL 取 base_fare + per_stop * stop_count 估算
+    # Cypher: 同 shortest_route，但回傳後在 Python 計算 fare
+    # CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min') ...
+    # → 再 call query_national_rail_fare / query_metro_fare 計算 total_fare_usd
     raise NotImplementedError("TODO: implement after designing your graph schema")
 
 
@@ -117,6 +131,12 @@ def query_alternative_routes(
     Returns:
         List of routes, each route is a list of leg dicts
     """
+    # --- CYPHER HINT ---
+    # MATCH p = (o:Station {station_id: $origin})-[:CONNECTS_TO*1..10]->(d:Station {station_id: $dest})
+    # WHERE NONE(n IN nodes(p) WHERE n.station_id = $avoid_station_id)
+    # RETURN [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
+    #        reduce(t=0, r IN relationships(p) | t + r.travel_time_min) AS total_time
+    # ORDER BY total_time LIMIT $max_routes
     raise NotImplementedError("TODO: implement after designing your graph schema")
 
 
@@ -134,6 +154,13 @@ def query_interchange_path(origin_id: str, destination_id: str) -> dict:
     Returns:
         dict with found, stations list, interchange points, total_time_min
     """
+    # --- CYPHER HINT ---
+    # MATCH p = (o:Station {station_id: $origin_id})
+    #           -[:CONNECTS_TO|INTERCHANGE_WITH*1..20]->
+    #           (d:Station {station_id: $dest_id})
+    # WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_WITH')
+    # RETURN nodes(p), relationships(p)
+    # ORDER BY size(nodes(p)) LIMIT 1
     raise NotImplementedError("TODO: implement after designing your graph schema")
 
 
@@ -151,6 +178,12 @@ def query_delay_ripple(delayed_station_id: str, hops: int = 2) -> list[dict]:
     Returns:
         List of dicts: {station_id, name, hops_away, lines_affected}
     """
+    # --- CYPHER HINT ---
+    # MATCH (s:Station {station_id: $station_id})-[:CONNECTS_TO*1..$hops]->(affected:Station)
+    # RETURN DISTINCT affected.station_id AS station_id,
+    #        affected.name AS name,
+    #        min(length(path)) AS hops_away,
+    #        affected.lines AS lines_affected
     raise NotImplementedError("TODO: implement after designing your graph schema")
 
 
@@ -163,4 +196,8 @@ def query_station_connections(station_id: str) -> list[dict]:
     Args:
         station_id: e.g. "MS01" or "NR01"
     """
+    # --- CYPHER HINT ---
+    # MATCH (s:Station {station_id: $station_id})-[r:CONNECTS_TO]->(n:Station)
+    # RETURN n.station_id AS station_id, n.name AS name,
+    #        r.line AS line, r.travel_time_min AS travel_time_min, r.network AS network
     raise NotImplementedError("TODO: implement after designing your graph schema")
