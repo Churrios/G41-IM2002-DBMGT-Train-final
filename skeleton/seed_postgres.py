@@ -13,6 +13,7 @@ import json
 import os
 import sys
 
+import bcrypt
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -65,6 +66,13 @@ def seed_national_rail_stations(cur):
     data = load("national_rail_stations.json")
     # TODO: Design your table schema, then implement the INSERT logic here.
     pass
+
+
+def update_metro_interchange(cur):
+    data = load("metro_stations.json")
+    # TODO: Implement the update logic here.
+    pass
+
 
 
 def seed_metro_schedules(cur):
@@ -125,12 +133,13 @@ def main():
 
     try:
         print("Seeding tables (dependency order):")
+        seed_users(cur)
         seed_metro_stations(cur)
         seed_national_rail_stations(cur)
+        update_metro_interchange(cur)
         seed_metro_schedules(cur)
         seed_national_rail_schedules(cur)
         seed_seat_layouts(cur)
-        seed_users(cur)
         seed_national_rail_bookings(cur)
         seed_metro_travels(cur)
         seed_payments(cur)
