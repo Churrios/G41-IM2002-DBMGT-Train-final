@@ -345,9 +345,29 @@ def seed_metro_travels(cur):
 
 
 def seed_payments(cur):
+    """
+    Seed payments table from payments.json.
+    Missing refunded_at is handled by defaulting to None.
+    """
     data = load("payments.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "payment_id", "booking_id", "amount_usd", "method", "status",
+        "paid_at", "refunded_at"
+    ]
+    rows = []
+    for p in data:
+        rows.append((
+            p.get("payment_id"),
+            p.get("booking_id"),
+            p.get("amount_usd"),
+            p.get("method"),
+            p.get("status"),
+            p.get("paid_at"),
+            p.get("refunded_at")
+        ))
+        
+    inserted = insert_many(cur, "payments", columns, rows)
+    print(f"Seeded {inserted} payments.")
 
 
 def seed_feedback(cur):
