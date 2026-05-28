@@ -83,6 +83,17 @@ def query_national_rail_availability(
         destination_id:  e.g. "NR05"
         travel_date:     e.g. "2025-06-01" — used to count bookings; omit for general info
     """
+    # --- SQL HINT ---
+    # SELECT s.*, array_position(s.stops_in_order, %s) AS origin_pos,
+    #        array_position(s.stops_in_order, %s) AS dest_pos,
+    #        COUNT(b.booking_id) AS booked_seats
+    # FROM national_rail_schedules s
+    # LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
+    #                      AND b.travel_date = %s
+    #                      AND b.status != 'cancelled'
+    # WHERE s.stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
+    # GROUP BY s.schedule_id
+    # HAVING array_position(s.stops_in_order, %s) < array_position(s.stops_in_order, %s)
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -102,6 +113,13 @@ def query_national_rail_fare(
     Returns:
         dict with fare_class, base_fare_usd, per_stop_rate_usd, total_fare_usd
     """
+    # --- SQL HINT ---
+    # SELECT std_base_fare_usd, std_per_stop_rate_usd,
+    #        first_base_fare_usd, first_per_stop_rate_usd
+    # FROM national_rail_schedules WHERE schedule_id = %s
+    # → 選 fare_class 對應的 base + per_stop
+    # → total = base + per_stop * stops_travelled
+    # → return dict with fare_class, base_fare_usd, per_stop_rate_usd, total_fare_usd
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -115,6 +133,10 @@ def query_metro_schedules(origin_id: str, destination_id: str) -> list[dict]:
         origin_id:       e.g. "MS01"
         destination_id:  e.g. "MS09"
     """
+    # --- SQL HINT ---
+    # SELECT * FROM metro_schedules
+    # WHERE stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
+    # → 在 Python 過濾 array_position(origin) < array_position(destination)
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -129,6 +151,10 @@ def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
     Returns:
         dict with base_fare_usd, per_stop_rate_usd, total_fare_usd
     """
+    # --- SQL HINT ---
+    # SELECT base_fare_usd, per_stop_rate_usd FROM metro_schedules
+    # WHERE schedule_id = %s
+    # → total = base + per_stop * stops_travelled
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -150,6 +176,15 @@ def query_available_seats(
     Returns:
         List of dicts: {seat_id, coach, row, column}
     """
+    # --- SQL HINT ---
+    # SELECT sl.seat_id, sl.coach, sl.row_num, sl.col_char
+    # FROM seat_layouts sl
+    # WHERE sl.schedule_id = %s AND sl.fare_class = %s
+    #   AND sl.seat_id NOT IN (
+    #       SELECT seat_id FROM bookings
+    #       WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
+    #   )
+    # ORDER BY sl.coach, sl.row_num, sl.col_char
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -184,6 +219,8 @@ def auto_select_adjacent_seats(available_seats: list[dict], count: int) -> list[
 
 def query_user_profile(user_email: str) -> Optional[dict]:
     """Return a user's profile by email."""
+    # --- SQL HINT ---
+    # SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -194,11 +231,21 @@ def query_user_bookings(user_email: str) -> dict:
     Returns:
         dict with keys 'national_rail' (list) and 'metro' (list)
     """
+    # --- SQL HINT ---
+    # national rail: SELECT b.*, s.line, s.service_type
+    #   FROM bookings b JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
+    #   WHERE b.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+    # metro: SELECT m.*, s.line
+    #   FROM metro_travel_history m JOIN metro_schedules s ON m.schedule_id = s.schedule_id
+    #   WHERE m.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+    # → return {"national_rail": [...], "metro": [...]}
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
 def query_payment_info(booking_id: str) -> Optional[dict]:
     """Return payment record for a booking or metro trip."""
+    # --- SQL HINT ---
+    # SELECT * FROM payments WHERE booking_id = %s
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -231,6 +278,14 @@ def execute_booking(
         (True, booking_dict)   on success
         (False, error_message) on failure
     """
+    # --- SQL HINT ---
+    # Steps (all in one transaction, conn.autocommit = False):
+    # 1. SELECT stops_travelled = array_position(dest) - array_position(origin) FROM schedule
+    # 2. SELECT fare via query_national_rail_fare logic
+    # 3. INSERT INTO bookings (...) VALUES (...) — booking_id = _gen_booking_id()
+    # 4. INSERT INTO payments (...) — payment_id = _gen_payment_id(), status='paid'
+    # 5. conn.commit()
+    # On any exception: conn.rollback(), return (False, str(e))
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -250,6 +305,16 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
         (True, result_dict)  with refund_amount_usd and policy note
         (False, error_msg)
     """
+    # --- SQL HINT ---
+    # Steps:
+    # 1. SELECT booking + schedule.service_type WHERE booking_id = %s AND user_id = %s
+    # 2. Check status != 'cancelled'
+    # 3. Calculate refund based on hours until travel_date:
+    #    normal service: >48h → 100%, 24-48h → 75%, 12-24h → 50%, <12h → 0%
+    #    express service: >24h → 100%, 12-24h → 50%, <12h → 0%
+    # 4. UPDATE bookings SET status='cancelled', cancelled_at=NOW()
+    # 5. INSERT INTO payments (new row) with negative amount = refund, status='refunded'
+    # 6. conn.commit()
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -267,10 +332,15 @@ def register_user(
     """
     Register a new user.
     Returns (True, user_id) on success or (False, error_message) on failure.
-
-    NOTE: passwords are stored as plain text here intentionally for teaching
-    purposes. In production, replace with a salted hash (e.g. bcrypt).
     """
+    # --- SQL HINT ---
+    # import bcrypt
+    # hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    # user_id = "RU" + str(next_id).zfill(3)  OR  "RU-" + random suffix
+    # full_name = first_name + " " + surname
+    # date_of_birth = date(year_of_birth, 1, 1)  (approximate — only year given)
+    # INSERT INTO registered_users (...) ON CONFLICT (email) DO NOTHING
+    # → return (True, user_id) or (False, "Email already registered")
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
@@ -279,21 +349,35 @@ def login_user(email: str, password: str) -> Optional[dict]:
     Verify credentials. Returns a user dict on success or None on failure.
     Dict keys: user_id, email, full_name, first_name, surname, phone, date_of_birth, is_active.
     """
+    # --- SQL HINT ---
+    # SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE
+    # → bcrypt.checkpw(password.encode(), row['password'].encode())
+    # → return dict(row) if match else None
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
 def get_user_secret_question(email: str) -> Optional[str]:
     """Return the secret question for a registered email, or None if not found."""
+    # --- SQL HINT ---
+    # SELECT secret_question FROM registered_users WHERE email = %s
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
 def verify_secret_answer(email: str, answer: str) -> bool:
     """Return True if the provided answer matches the stored secret answer (case-insensitive)."""
+    # --- SQL HINT ---
+    # SELECT secret_answer FROM registered_users WHERE email = %s
+    # → return answer.strip().lower() == stored.strip().lower()
     raise NotImplementedError("TODO: implement after designing your schema")
 
 
 def update_password(email: str, new_password: str) -> bool:
     """Update the password for a user. Returns True if the row was updated."""
+    # --- SQL HINT ---
+    # import bcrypt
+    # hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    # UPDATE registered_users SET password = %s WHERE email = %s
+    # → return cur.rowcount == 1
     raise NotImplementedError("TODO: implement after designing your schema")
 
 

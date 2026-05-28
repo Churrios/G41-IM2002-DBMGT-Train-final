@@ -195,6 +195,19 @@ CREATE TABLE payments (
     refunded_at  TIMESTAMPTZ
 );
 
+-- ============================================================
+--  7. FEEDBACK
+--  booking_id 不加 FK — 同時參照 BK (bookings) 和 MT (metro_travel_history)
+-- ============================================================
+
+CREATE TABLE feedback (
+    feedback_id   VARCHAR(20)   PRIMARY KEY,
+    booking_id    VARCHAR(20)   NOT NULL,
+    user_id       VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id),
+    rating        SMALLINT      NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment       TEXT,
+    submitted_at  TIMESTAMPTZ   DEFAULT NOW()
+);
 
 
 
