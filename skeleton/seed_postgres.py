@@ -272,9 +272,41 @@ def seed_users(cur):
 
 
 def seed_national_rail_bookings(cur):
+    """
+    Seed bookings table from bookings.json.
+    Missing cancelled_at is filled with None. Missing travelled_at handled safely.
+    """
     data = load("bookings.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "booking_id", "user_id", "schedule_id", "origin_station_id",
+        "destination_station_id", "travel_date", "departure_time", "ticket_type",
+        "fare_class", "coach", "seat_id", "stops_travelled", "amount_usd", "status",
+        "booked_at", "travelled_at", "cancelled_at"
+    ]
+    rows = []
+    for b in data:
+        rows.append((
+            b.get("booking_id"),
+            b.get("user_id"),
+            b.get("schedule_id"),
+            b.get("origin_station_id"),
+            b.get("destination_station_id"),
+            b.get("travel_date"),
+            b.get("departure_time"),
+            b.get("ticket_type"),
+            b.get("fare_class"),
+            b.get("coach"),
+            b.get("seat_id"),
+            b.get("stops_travelled"),
+            b.get("amount_usd"),
+            b.get("status"),
+            b.get("booked_at"),
+            b.get("travelled_at"),
+            b.get("cancelled_at")
+        ))
+        
+    inserted = insert_many(cur, "bookings", columns, rows)
+    print(f"Seeded {inserted} national rail bookings.")
 
 
 def seed_metro_travels(cur):
