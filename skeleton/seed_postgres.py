@@ -81,9 +81,28 @@ def seed_metro_stations(cur):
 
 
 def seed_national_rail_stations(cur):
+    """
+    Seed national_rail_stations table from national_rail_stations.json.
+    Ignores adjacent_stations.
+    """
     data = load("national_rail_stations.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "station_id", "name", "lines", "is_interchange_national_rail", 
+        "is_interchange_metro", "interchange_metro_station_id"
+    ]
+    rows = []
+    for s in data:
+        rows.append((
+            s.get("station_id"),
+            s.get("name"),
+            s.get("lines", []),
+            s.get("is_interchange_national_rail", False),
+            s.get("is_interchange_metro", False),
+            s.get("interchange_metro_station_id")
+        ))
+        
+    inserted = insert_many(cur, "national_rail_stations", columns, rows)
+    print(f"Seeded {inserted} national rail stations.")
 
 
 def update_metro_interchange(cur):
