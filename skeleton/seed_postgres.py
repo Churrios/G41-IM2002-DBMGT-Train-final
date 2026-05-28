@@ -106,9 +106,28 @@ def seed_national_rail_stations(cur):
 
 
 def update_metro_interchange(cur):
+    """
+    Update metro_stations table to set interchange_nr_station_id.
+    This resolves the circular dependency between the two station tables.
+    """
     data = load("metro_stations.json")
-    # TODO: Implement the update logic here.
-    pass
+    rows = []
+    for s in data:
+        nr_id = s.get("interchange_national_rail_station_id")
+        if nr_id:
+            rows.append((nr_id, s.get("station_id")))
+            
+    if not rows:
+        return
+        
+    sql = """
+        UPDATE metro_stations AS m
+        SET interchange_nr_station_id = v.nr_id
+        FROM (VALUES %s) AS v(nr_id, station_id)
+        WHERE m.station_id = v.station_id
+    """
+    execute_values(cur, sql, rows)
+    print(f"Updated {len(rows)} metro stations with NR interchanges.")
 
 
 
