@@ -209,9 +209,33 @@ def seed_national_rail_schedules(cur):
 
 
 def seed_seat_layouts(cur):
+    """
+    Seed seat_layouts table from national_rail_seat_layouts.json.
+    Flattens the nested coaches and seats lists into individual rows.
+    """
     data = load("national_rail_seat_layouts.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "schedule_id", "seat_id", "coach", "row_num", "col_char", "fare_class"
+    ]
+    rows = []
+    for schedule in data:
+        schedule_id = schedule.get("schedule_id")
+        coaches = schedule.get("coaches", [])
+        for coach in coaches:
+            coach_id = coach.get("coach")
+            seats = coach.get("seats", [])
+            for seat in seats:
+                rows.append((
+                    schedule_id,
+                    seat.get("seat_id"),
+                    coach_id,
+                    seat.get("row"),
+                    seat.get("column"),
+                    seat.get("fare_class")
+                ))
+                
+    inserted = insert_many(cur, "seat_layouts", columns, rows)
+    print(f"Seeded {inserted} seat layouts.")
 
 
 def seed_users(cur):
