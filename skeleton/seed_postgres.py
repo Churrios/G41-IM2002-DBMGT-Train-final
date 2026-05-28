@@ -94,9 +94,36 @@ def seed_seat_layouts(cur):
 
 
 def seed_users(cur):
+    """
+    Seed registered_users table from registered_users.json.
+    Hashes the plaintext password using bcrypt before inserting.
+    """
     data = load("registered_users.json")
-    # TODO: Design your table schema, then implement the INSERT logic here.
-    pass
+    columns = [
+        "user_id", "full_name", "email", "password", "phone",
+        "date_of_birth", "secret_question", "secret_answer",
+        "registered_at", "is_active"
+    ]
+    
+    rows = []
+    for u in data:
+        pwd = u.get("password", "")
+        hashed_pwd = bcrypt.hashpw(pwd.encode(), bcrypt.gensalt()).decode()
+        rows.append((
+            u.get("user_id"),
+            u.get("full_name"),
+            u.get("email"),
+            hashed_pwd,
+            u.get("phone"),
+            u.get("date_of_birth"),
+            u.get("secret_question"),
+            u.get("secret_answer"),
+            u.get("registered_at"),
+            u.get("is_active")
+        ))
+        
+    inserted = insert_many(cur, "registered_users", columns, rows)
+    print(f"Seeded {inserted} users.")
 
 
 def seed_national_rail_bookings(cur):
