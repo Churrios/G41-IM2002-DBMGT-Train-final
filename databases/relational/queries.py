@@ -359,15 +359,106 @@ def execute_booking(
         (True, booking_dict)   on success
         (False, error_message) on failure
     """
-    # --- SQL HINT ---
-    # Steps (all in one transaction, conn.autocommit = False):
-    # 1. SELECT stops_travelled = array_position(dest) - array_position(origin) FROM schedule
-    # 2. SELECT fare via query_national_rail_fare logic
-    # 3. INSERT INTO bookings (...) VALUES (...) — booking_id = _gen_booking_id()
-    # 4. INSERT INTO payments (...) — payment_id = _gen_payment_id(), status='paid'
-    # 5. conn.commit()
-    # On any exception: conn.rollback(), return (False, str(e))
-    raise NotImplementedError("TODO: implement after designing your schema")
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch schedule to get stop order, fares, and departure time
+            cur.execute(
+                """
+                SELECT stops_in_order, first_train_time,
+                       std_base_fare_usd, std_per_stop_rate_usd,
+                       first_base_fare_usd, first_per_stop_rate_usd
+                FROM national_rail_schedules
+                WHERE schedule_id = %s
+                """,
+                (schedule_id,),
+            )
+            schedule = cur.fetchone()
+            if schedule is None:
+                return (False, "Schedule not found")
+
+            stops = list(schedule["stops_in_order"])
+            if origin_station_id not in stops or destination_station_id not in stops:
+                return (False, "Stations not on this route")
+            origin_pos = stops.index(origin_station_id)
+            dest_pos = stops.index(destination_station_id)
+            if origin_pos >= dest_pos:
+                return (False, "Invalid route direction")
+            stops_count = dest_pos - origin_pos
+
+            # 2. Calculate fare
+            if fare_class == "first":
+                base = float(schedule["first_base_fare_usd"])
+                per_stop = float(schedule["first_per_stop_rate_usd"])
+            else:
+                base = float(schedule["std_base_fare_usd"])
+                per_stop = float(schedule["std_per_stop_rate_usd"])
+            amount = round(base + per_stop * stops_count, 2)
+
+            # 3. Resolve seat and coach
+            if seat_id == "any":
+                cur.execute(
+                    """
+                    SELECT seat_id, coach FROM seat_layouts
+                    WHERE schedule_id = %s AND fare_class = %s
+                      AND seat_id NOT IN (
+                          SELECT seat_id FROM bookings
+                          WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
+                      )
+                    LIMIT 1
+                    """,
+                    (schedule_id, fare_class, schedule_id, travel_date),
+                )
+                seat_row = cur.fetchone()
+                if seat_row is None:
+                    return (False, "No seats available")
+                resolved_seat_id = seat_row["seat_id"]
+                coach = seat_row["coach"]
+            else:
+                cur.execute(
+                    "SELECT coach FROM seat_layouts WHERE schedule_id = %s AND seat_id = %s",
+                    (schedule_id, seat_id),
+                )
+                seat_row = cur.fetchone()
+                resolved_seat_id = seat_id
+                coach = seat_row["coach"] if seat_row else ""
+
+            # 4. Insert booking
+            booking_id = _gen_booking_id()
+            cur.execute(
+                """
+                INSERT INTO bookings
+                    (booking_id, user_id, schedule_id,
+                     origin_station_id, destination_station_id,
+                     travel_date, departure_time, ticket_type, fare_class,
+                     coach, seat_id, stops_travelled, amount_usd, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'confirmed')
+                RETURNING *
+                """,
+                (booking_id, user_id, schedule_id,
+                 origin_station_id, destination_station_id,
+                 travel_date, schedule["first_train_time"], ticket_type, fare_class,
+                 coach, resolved_seat_id, stops_count, amount),
+            )
+            booking = dict(cur.fetchone())
+
+            # 5. Insert payment — both inserts share one commit (atomic)
+            cur.execute(
+                """
+                INSERT INTO payments (payment_id, booking_id, amount_usd, method, status)
+                VALUES (%s, %s, %s, 'card', 'paid')
+                """,
+                (_gen_payment_id(), booking_id, amount),
+            )
+
+        conn.commit()
+        return (True, booking)
+    except Exception as e:
+        conn.rollback()
+        return (False, str(e))
+    finally:
+        conn.close()
 
 
 def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | str]:
