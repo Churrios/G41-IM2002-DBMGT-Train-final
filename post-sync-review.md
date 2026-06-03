@@ -97,13 +97,58 @@ queries.py 幾乎無 inline comment，可能失去 1 分
 
 ---
 
-## 七、待辦事項
+## 七、新發現：三份獨立繳交項目
 
-- [ ] **Task 4**：討論是否修改 graph schema 命名符合評分標準
+> 來源：`STUDENT_GUIDE.md` — 三個評分系統各 /100 獨立計分
+
+| 項目 | 繳交方式 | 狀態 |
+|------|---------|------|
+| **Code Repository** | GitHub repo link → EEClass | ✅ repo 已建立 |
+| **Design Document** | Markdown → EEClass | ❌ **完全未開始** |
+| **Work Allocation Report** | 填寫 `WORK_ALLOCATION_TEMPLATE.md` → EEClass | ❌ 未填寫 |
+| **Peer Review Report** | 每人個別填寫 `PEER_REVIEW_TEMPLATE.md` → EEClass | ❌ 未填寫 |
+
+### Design Document 需要的六個章節（/100）
+
+| 章節 | 分數 | 狀態 |
+|------|------|------|
+| Section 1 — ER Diagram | /25 | ❌ |
+| Section 2 — Normalisation Justification | /20 | ❌ |
+| Section 3 — Graph Database Design Rationale | /25 | ❌ |
+| Section 4 — Vector / RAG Design | /15 | ❌ |
+| Section 5 — AI Tool Usage Evidence | /10 | ❌ |
+| Section 6 — Reflection & Trade-offs | /5 | ❌ |
+
+---
+
+### Live Testing 新發現問題（STUDENT_GUIDE_LIVE.md）
+
+| 項目 | 問題 | 分數風險 |
+|------|------|---------|
+| Section A：Neo4j relationship 檢查 | 評分期望 `METRO_LINK`/`RAIL_LINK`，我們用 `CONNECTS_TO` | 2 分 |
+| B6：`query_user_profile` | 評分期望回傳 `year_of_birth`，schema 存的是 `date_of_birth` | 需確認 |
+| C4：`query_interchange_path` | 評分期望 `INTERCHANGE_TO` edges，我們用 `INTERCHANGE_WITH` | 部分分數 |
+
+---
+
+## 八、待辦事項
+
+### 🔴 緊急（影響整個評分系統）
+- [ ] **Design Document**：開始撰寫六個章節（Section 1–6）
+- [ ] **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md`
+- [ ] **Peer Review**：三人各自填寫 `PEER_REVIEW_TEMPLATE.md`
+
+### 🔴 高風險（評分直接扣分）
+- [ ] **Task 4 / Live A**：討論是否修改 graph schema 命名符合評分（`MetroStation`/`METRO_LINK`/`INTERCHANGE_TO`）
+- [ ] **Live B6**：確認 `query_user_profile` 回傳是否包含 `year_of_birth`
+
+### 🟡 中等風險
 - [ ] **Task 1 FK cascade**：所有 FK 加上 `ON DELETE RESTRICT`
 - [ ] **Task 1 PK comment**：schema.sql PK 欄位加設計決策說明
 - [ ] **Task 1 Delete strategy**：加 comment 說明 soft delete
 - [ ] **Task 1 Normalisation**：討論是否改用 junction table
 - [ ] **Code Quality**：queries.py 非顯而易見函式加 inline comment
+
+### 🟢 低優先
 - [ ] **蔣**：確認是否補 commit 修正 `embed()` 快取
 - [ ] **execute_cancellation**：確認 metro booking 邊界
