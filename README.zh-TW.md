@@ -714,15 +714,15 @@ python skeleton/seed_vectors.py
 
 **必做：你們必須編輯這些檔案才能完成專案：**
 
-| 檔案 | 要做什麼 |
-|---|---|
-| `skeleton/seed_postgres.py` | 實作每個 `seed_*` 函式，將 JSON 資料載入 PostgreSQL tables |
-| `skeleton/seed_neo4j.py` | 實作 `seed()` 函式，在 Neo4j 建立車站 nodes 與 rail link relationships |
-| `databases/relational/schema.sql` | 為所有 relational data 設計並撰寫 table definitions（DDL） |
-| `databases/relational/queries.py` | 新增查詢 PostgreSQL tables 的 Python 函式 |
-| `databases/graph/seed.cypher` | 定義 graph topology，也就是 station nodes 與它們之間的 links |
-| `databases/graph/queries.py` | 新增對 Neo4j 執行 Cypher 查詢的 Python 函式 |
-| `train-mock-data/refund_policy.json`, `ticket_types.json`, `booking_rules.json`, `travel_policies.json` | 新增或擴充 policy entries，讓助理能回答更多政策問題 |
+| 檔案 | 要做什麼 | 狀態 |
+|---|---|---|
+| `skeleton/seed_postgres.py` | 實作每個 `seed_*` 函式，將 JSON 資料載入 PostgreSQL tables | ✅ 10 個函式，ON CONFLICT DO NOTHING |
+| `skeleton/seed_neo4j.py` | 實作 `seed()` 函式，在 Neo4j 建立車站 nodes 與 rail link relationships | ✅ 完成，使用 MERGE |
+| `databases/relational/schema.sql` | 為所有 relational data 設計並撰寫 table definitions（DDL） | ✅ 7 張表 + indexes + FKs |
+| `databases/relational/queries.py` | 新增查詢 PostgreSQL tables 的 Python 函式 | ✅ 15 個函式已實作 |
+| `databases/graph/seed.cypher` | 定義 graph topology，也就是 station nodes 與它們之間的 links | ⚠️ 已廢棄，改由 seed_neo4j.py 負責 |
+| `databases/graph/queries.py` | 新增對 Neo4j 執行 Cypher 查詢的 Python 函式 | ✅ 6 個函式已實作 |
+| `train-mock-data/refund_policy.json`, `ticket_types.json`, `booking_rules.json`, `travel_policies.json` | 新增或擴充 policy entries，讓助理能回答更多政策問題 | ⚠️ 使用原始提供的內容，未額外擴充 |
 
 **選做：你可以編輯這些檔案以加入延伸功能：**
 
