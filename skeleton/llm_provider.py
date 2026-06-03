@@ -140,12 +140,11 @@ class LLMProvider:
             return self._gemini_chat(messages, system_prompt)
         return self._ollama_chat(messages, system_prompt)
 
-    @lru_cache(maxsize=1000)
-    def embed(self, text: str) -> tuple[float, ...]:
+    def embed(self, text: str) -> List[float]:
         # Uses the provider set at startup — must match the model used to seed the vectors
         if self._embed_provider == "ollama":
-            return tuple(self._ollama_embed(text))
-        return tuple(self._gemini_embed(text))
+            return self._ollama_embed(text)
+        return self._gemini_embed(text)
 
     # ── Gemini internals ───────────────────────────────────────────────────
 
