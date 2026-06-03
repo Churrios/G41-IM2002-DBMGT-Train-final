@@ -18,11 +18,19 @@ import json
 import os
 import sys
 import time
+from functools import lru_cache
 
 sys.path.insert(0, ".")
 
 from skeleton.llm_provider import llm
 from databases.relational.queries import store_policy_document
+
+@lru_cache(maxsize=1000)
+def _cached_embed_tuple(text: str) -> tuple:
+    return tuple(llm.embed(text))
+
+def safe_cached_embed(text: str) -> list[float]:
+    return list(_cached_embed_tuple(text))
 
 _DATA_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "train-mock-data")
@@ -116,7 +124,7 @@ def seed():
 
         for j, chunk_content in enumerate(chunks):
             try:
-                embedding = llm.embed(chunk_content)
+                embedding = safe_cached_embed(chunk_content)
 
                 if len(embedding) != llm.embed_dim:
                     print(f"    ⚠️  Unexpected embedding dim: {len(embedding)} (expected {llm.embed_dim})")
