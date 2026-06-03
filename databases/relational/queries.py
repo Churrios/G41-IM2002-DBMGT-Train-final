@@ -83,18 +83,27 @@ def query_national_rail_availability(
         destination_id:  e.g. "NR05"
         travel_date:     e.g. "2025-06-01" — used to count bookings; omit for general info
     """
-    # --- SQL HINT ---
-    # SELECT s.*, array_position(s.stops_in_order, %s) AS origin_pos,
-    #        array_position(s.stops_in_order, %s) AS dest_pos,
-    #        COUNT(b.booking_id) AS booked_seats
-    # FROM national_rail_schedules s
-    # LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
-    #                      AND b.travel_date = %s
-    #                      AND b.status != 'cancelled'
-    # WHERE s.stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
-    # GROUP BY s.schedule_id
-    # HAVING array_position(s.stops_in_order, %s) < array_position(s.stops_in_order, %s)
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT s.*,
+                       array_position(s.stops_in_order, %s) AS origin_pos,
+                       array_position(s.stops_in_order, %s) AS dest_pos,
+                       COUNT(b.booking_id) AS booked_seats
+                FROM national_rail_schedules s
+                LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
+                                    AND b.travel_date = %s
+                                    AND b.status != 'cancelled'
+                WHERE s.stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
+                GROUP BY s.schedule_id
+                HAVING array_position(s.stops_in_order, %s) < array_position(s.stops_in_order, %s)
+                """,
+                (origin_id, destination_id, travel_date,
+                 origin_id, destination_id,
+                 origin_id, destination_id),
+            )
+            return [dict(row) for row in cur.fetchall()]
 
 
 def query_national_rail_fare(
@@ -113,14 +122,32 @@ def query_national_rail_fare(
     Returns:
         dict with fare_class, base_fare_usd, per_stop_rate_usd, total_fare_usd
     """
-    # --- SQL HINT ---
-    # SELECT std_base_fare_usd, std_per_stop_rate_usd,
-    #        first_base_fare_usd, first_per_stop_rate_usd
-    # FROM national_rail_schedules WHERE schedule_id = %s
-    # → 選 fare_class 對應的 base + per_stop
-    # → total = base + per_stop * stops_travelled
-    # → return dict with fare_class, base_fare_usd, per_stop_rate_usd, total_fare_usd
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT std_base_fare_usd, std_per_stop_rate_usd,
+                       first_base_fare_usd, first_per_stop_rate_usd
+                FROM national_rail_schedules
+                WHERE schedule_id = %s
+                """,
+                (schedule_id,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    if fare_class == "first":
+        base = float(row["first_base_fare_usd"])
+        per_stop = float(row["first_per_stop_rate_usd"])
+    else:
+        base = float(row["std_base_fare_usd"])
+        per_stop = float(row["std_per_stop_rate_usd"])
+    return {
+        "fare_class": fare_class,
+        "base_fare_usd": base,
+        "per_stop_rate_usd": per_stop,
+        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+    }
 
 
 # ── METRO SCHEDULES & FARE ────────────────────────────────────────────────────
@@ -133,11 +160,21 @@ def query_metro_schedules(origin_id: str, destination_id: str) -> list[dict]:
         origin_id:       e.g. "MS01"
         destination_id:  e.g. "MS09"
     """
-    # --- SQL HINT ---
-    # SELECT * FROM metro_schedules
-    # WHERE stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
-    # → 在 Python 過濾 array_position(origin) < array_position(destination)
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT * FROM metro_schedules
+                WHERE stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
+                """,
+                (origin_id, destination_id),
+            )
+            rows = cur.fetchall()
+    # origin must appear before destination in the stop sequence
+    return [
+        dict(r) for r in rows
+        if r["stops_in_order"].index(origin_id) < r["stops_in_order"].index(destination_id)
+    ]
 
 
 def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
@@ -151,11 +188,22 @@ def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
     Returns:
         dict with base_fare_usd, per_stop_rate_usd, total_fare_usd
     """
-    # --- SQL HINT ---
-    # SELECT base_fare_usd, per_stop_rate_usd FROM metro_schedules
-    # WHERE schedule_id = %s
-    # → total = base + per_stop * stops_travelled
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT base_fare_usd, per_stop_rate_usd FROM metro_schedules WHERE schedule_id = %s",
+                (schedule_id,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    base = float(row["base_fare_usd"])
+    per_stop = float(row["per_stop_rate_usd"])
+    return {
+        "base_fare_usd": base,
+        "per_stop_rate_usd": per_stop,
+        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+    }
 
 
 # ── SEAT SELECTION ────────────────────────────────────────────────────────────
@@ -176,16 +224,22 @@ def query_available_seats(
     Returns:
         List of dicts: {seat_id, coach, row, column}
     """
-    # --- SQL HINT ---
-    # SELECT sl.seat_id, sl.coach, sl.row_num, sl.col_char
-    # FROM seat_layouts sl
-    # WHERE sl.schedule_id = %s AND sl.fare_class = %s
-    #   AND sl.seat_id NOT IN (
-    #       SELECT seat_id FROM bookings
-    #       WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
-    #   )
-    # ORDER BY sl.coach, sl.row_num, sl.col_char
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT sl.seat_id, sl.coach, sl.row_num AS row, sl.col_char AS column
+                FROM seat_layouts sl
+                WHERE sl.schedule_id = %s AND sl.fare_class = %s
+                  AND sl.seat_id NOT IN (
+                      SELECT seat_id FROM bookings
+                      WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
+                  )
+                ORDER BY sl.coach, sl.row_num, sl.col_char
+                """,
+                (schedule_id, fare_class, schedule_id, travel_date),
+            )
+            return [dict(row) for row in cur.fetchall()]
 
 
 def auto_select_adjacent_seats(available_seats: list[dict], count: int) -> list[str]:
@@ -219,9 +273,14 @@ def auto_select_adjacent_seats(available_seats: list[dict], count: int) -> list[
 
 def query_user_profile(user_email: str) -> Optional[dict]:
     """Return a user's profile by email."""
-    # --- SQL HINT ---
-    # SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE",
+                (user_email,),
+            )
+            row = cur.fetchone()
+    return dict(row) if row is not None else None
 
 
 def query_user_bookings(user_email: str) -> dict:
@@ -231,22 +290,43 @@ def query_user_bookings(user_email: str) -> dict:
     Returns:
         dict with keys 'national_rail' (list) and 'metro' (list)
     """
-    # --- SQL HINT ---
-    # national rail: SELECT b.*, s.line, s.service_type
-    #   FROM bookings b JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
-    #   WHERE b.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
-    # metro: SELECT m.*, s.line
-    #   FROM metro_travel_history m JOIN metro_schedules s ON m.schedule_id = s.schedule_id
-    #   WHERE m.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
-    # → return {"national_rail": [...], "metro": [...]}
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT b.*, s.line, s.service_type
+                FROM bookings b
+                JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
+                WHERE b.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+                """,
+                (user_email,),
+            )
+            nr = [dict(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT m.*, s.line
+                FROM metro_travel_history m
+                JOIN metro_schedules s ON m.schedule_id = s.schedule_id
+                WHERE m.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+                """,
+                (user_email,),
+            )
+            metro = [dict(row) for row in cur.fetchall()]
+
+    return {"national_rail": nr, "metro": metro}
 
 
 def query_payment_info(booking_id: str) -> Optional[dict]:
     """Return payment record for a booking or metro trip."""
-    # --- SQL HINT ---
-    # SELECT * FROM payments WHERE booking_id = %s
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM payments WHERE booking_id = %s",
+                (booking_id,),
+            )
+            row = cur.fetchone()
+    return dict(row) if row is not None else None
 
 
 # ── TRANSACTIONAL OPERATIONS ──────────────────────────────────────────────────
@@ -358,17 +438,28 @@ def login_user(email: str, password: str) -> Optional[dict]:
 
 def get_user_secret_question(email: str) -> Optional[str]:
     """Return the secret question for a registered email, or None if not found."""
-    # --- SQL HINT ---
-    # SELECT secret_question FROM registered_users WHERE email = %s
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT secret_question FROM registered_users WHERE email = %s",
+                (email,),
+            )
+            row = cur.fetchone()
+    return row[0] if row is not None else None
 
 
 def verify_secret_answer(email: str, answer: str) -> bool:
     """Return True if the provided answer matches the stored secret answer (case-insensitive)."""
-    # --- SQL HINT ---
-    # SELECT secret_answer FROM registered_users WHERE email = %s
-    # → return answer.strip().lower() == stored.strip().lower()
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT secret_answer FROM registered_users WHERE email = %s",
+                (email,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return False
+    return answer.strip().lower() == row[0].strip().lower()
 
 
 def update_password(email: str, new_password: str) -> bool:
