@@ -89,15 +89,45 @@ def query_shortest_route(
         dict with keys: found, origin_id, destination_id,
                         total_time_min, path (list of station dicts), legs
     """
-    # --- CYPHER HINT ---
-    # MATCH (o:Station {station_id: $origin_id}), (d:Station {station_id: $dest_id})
-    # CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min')
-    # YIELD path, weight
-    # RETURN [node in nodes(path) | {station_id: node.station_id, name: node.name}] AS stations,
-    #        [rel in relationships(path) | {line: rel.line, travel_time_min: rel.travel_time_min}] AS legs,
-    #        weight AS total_time_min
-    # → wrap in {"found": bool, "total_time_min": weight, "path": stations, "legs": legs}
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    _not_found = {
+        "found": False,
+        "origin_id": origin_id,
+        "destination_id": destination_id,
+        "total_time_min": None,
+        "path": [],
+        "legs": [],
+    }
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH (o:Station {station_id: $origin_id}),
+                      (d:Station {station_id: $dest_id})
+                CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min')
+                YIELD path, weight
+                RETURN
+                    [node IN nodes(path) |
+                        {station_id: node.station_id, name: node.name}] AS stations,
+                    [rel IN relationships(path) |
+                        {line: rel.line, travel_time_min: rel.travel_time_min}] AS legs,
+                    weight AS total_time_min
+                """,
+                origin_id=origin_id,
+                dest_id=destination_id,
+            )
+            record = result.single()
+            if record is None:
+                return _not_found
+            return {
+                "found": True,
+                "origin_id": origin_id,
+                "destination_id": destination_id,
+                "total_time_min": int(record["total_time_min"]),
+                "path": list(record["stations"]),
+                "legs": list(record["legs"]),
+            }
+    except Exception:
+        return _not_found
 
 
 # ── CHEAPEST ROUTE (Dijkstra by fare) ────────────────────────────────────────
