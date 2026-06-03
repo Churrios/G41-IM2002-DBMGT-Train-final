@@ -216,7 +216,7 @@ def query_alternative_routes(
     avoid_station_id: str,
     network: str = "auto",
     max_routes: int = 3,
-) -> list[list[dict]]:
+) -> list[dict]:
     """
     Find paths between two stations that avoid a specific intermediate station.
     Useful for routing around a delayed or closed station.
