@@ -217,8 +217,20 @@ def query_station_connections(station_id: str) -> list[dict]:
     Args:
         station_id: e.g. "MS01" or "NR01"
     """
-    # --- CYPHER HINT ---
-    # MATCH (s:Station {station_id: $station_id})-[r:CONNECTS_TO]->(n:Station)
-    # RETURN n.station_id AS station_id, n.name AS name,
-    #        r.line AS line, r.travel_time_min AS travel_time_min, r.network AS network
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH (s:Station {station_id: $station_id})-[r:CONNECTS_TO]->(n:Station)
+                RETURN n.station_id AS station_id,
+                       n.name       AS name,
+                       r.line       AS line,
+                       r.travel_time_min AS travel_time_min,
+                       r.network    AS network
+                ORDER BY r.travel_time_min
+                """,
+                station_id=station_id,
+            )
+            return [dict(record) for record in result]
+    except Exception:
+        return []
