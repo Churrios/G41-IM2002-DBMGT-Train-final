@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import random
 import string
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import bcrypt
@@ -414,15 +414,34 @@ def register_user(
     Register a new user.
     Returns (True, user_id) on success or (False, error_message) on failure.
     """
-    # --- SQL HINT ---
-    # import bcrypt
-    # hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    # user_id = "RU" + str(next_id).zfill(3)  OR  "RU-" + random suffix
-    # full_name = first_name + " " + surname
-    # date_of_birth = date(year_of_birth, 1, 1)  (approximate — only year given)
-    # INSERT INTO registered_users (...) ON CONFLICT (email) DO NOTHING
-    # → return (True, user_id) or (False, "Email already registered")
-    raise NotImplementedError("TODO: implement after designing your schema")
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    full_name = f"{first_name} {surname}"
+    dob = date(year_of_birth, 1, 1)
+    user_id = "RU" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO registered_users
+                    (user_id, full_name, email, password, date_of_birth,
+                     secret_question, secret_answer)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (email) DO NOTHING
+                """,
+                (user_id, full_name, email, hashed, dob, secret_question, secret_answer),
+            )
+            inserted = cur.rowcount == 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    if not inserted:
+        return (False, "Email already registered")
+    return (True, user_id)
 
 
 def login_user(email: str, password: str) -> Optional[dict]:
