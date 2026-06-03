@@ -1,4 +1,4 @@
-# AI Session Context — TransitFlow
+# ✅ AI Session Context — TransitFlow
 
 **如何使用這個檔案：**
 每次開始 AI coding session 時，把這個檔案的完整內容作為第一則訊息貼給你的 AI assistant。這會提供 AI 所需的 context，讓它產生符合你 codebase、且與隊友工作一致的程式碼。
