@@ -151,11 +151,22 @@ def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
     Returns:
         dict with base_fare_usd, per_stop_rate_usd, total_fare_usd
     """
-    # --- SQL HINT ---
-    # SELECT base_fare_usd, per_stop_rate_usd FROM metro_schedules
-    # WHERE schedule_id = %s
-    # → total = base + per_stop * stops_travelled
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT base_fare_usd, per_stop_rate_usd FROM metro_schedules WHERE schedule_id = %s",
+                (schedule_id,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    base = float(row["base_fare_usd"])
+    per_stop = float(row["per_stop_rate_usd"])
+    return {
+        "base_fare_usd": base,
+        "per_stop_rate_usd": per_stop,
+        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+    }
 
 
 # ── SEAT SELECTION ────────────────────────────────────────────────────────────
