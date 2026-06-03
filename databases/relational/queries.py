@@ -151,11 +151,21 @@ def query_metro_schedules(origin_id: str, destination_id: str) -> list[dict]:
         origin_id:       e.g. "MS01"
         destination_id:  e.g. "MS09"
     """
-    # --- SQL HINT ---
-    # SELECT * FROM metro_schedules
-    # WHERE stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
-    # → 在 Python 過濾 array_position(origin) < array_position(destination)
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT * FROM metro_schedules
+                WHERE stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
+                """,
+                (origin_id, destination_id),
+            )
+            rows = cur.fetchall()
+    # origin must appear before destination in the stop sequence
+    return [
+        dict(r) for r in rows
+        if r["stops_in_order"].index(origin_id) < r["stops_in_order"].index(destination_id)
+    ]
 
 
 def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
