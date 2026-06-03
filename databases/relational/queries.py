@@ -83,18 +83,27 @@ def query_national_rail_availability(
         destination_id:  e.g. "NR05"
         travel_date:     e.g. "2025-06-01" — used to count bookings; omit for general info
     """
-    # --- SQL HINT ---
-    # SELECT s.*, array_position(s.stops_in_order, %s) AS origin_pos,
-    #        array_position(s.stops_in_order, %s) AS dest_pos,
-    #        COUNT(b.booking_id) AS booked_seats
-    # FROM national_rail_schedules s
-    # LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
-    #                      AND b.travel_date = %s
-    #                      AND b.status != 'cancelled'
-    # WHERE s.stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
-    # GROUP BY s.schedule_id
-    # HAVING array_position(s.stops_in_order, %s) < array_position(s.stops_in_order, %s)
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT s.*,
+                       array_position(s.stops_in_order, %s) AS origin_pos,
+                       array_position(s.stops_in_order, %s) AS dest_pos,
+                       COUNT(b.booking_id) AS booked_seats
+                FROM national_rail_schedules s
+                LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
+                                    AND b.travel_date = %s
+                                    AND b.status != 'cancelled'
+                WHERE s.stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
+                GROUP BY s.schedule_id
+                HAVING array_position(s.stops_in_order, %s) < array_position(s.stops_in_order, %s)
+                """,
+                (origin_id, destination_id, travel_date,
+                 origin_id, destination_id,
+                 origin_id, destination_id),
+            )
+            return [dict(row) for row in cur.fetchall()]
 
 
 def query_national_rail_fare(
