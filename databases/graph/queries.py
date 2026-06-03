@@ -229,13 +229,55 @@ def query_delay_ripple(delayed_station_id: str, hops: int = 2) -> list[dict]:
     Returns:
         List of dicts: {station_id, name, hops_away, lines_affected}
     """
-    # --- CYPHER HINT ---
-    # MATCH (s:Station {station_id: $station_id})-[:CONNECTS_TO*1..$hops]->(affected:Station)
-    # RETURN DISTINCT affected.station_id AS station_id,
-    #        affected.name AS name,
-    #        min(length(path)) AS hops_away,
-    #        affected.lines AS lines_affected
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    try:
+        safe_hops = max(0, int(hops))  # int() conversion prevents injection
+        with _get_driver().session() as session:
+            # Step 1 — always fetch the start node (hops_away=0)
+            start_record = session.run(
+                "MATCH (s:Station {station_id: $sid}) "
+                "RETURN s.station_id AS station_id, s.name AS name, s.lines AS lines_affected",
+                sid=delayed_station_id,
+            ).single()
+            if start_record is None:
+                return []
+
+            start_dict = {
+                "station_id": start_record["station_id"],
+                "name": start_record["name"],
+                "hops_away": 0,
+                "lines_affected": list(start_record["lines_affected"] or []),
+            }
+
+            # Step 2 — hops=0: only the delayed station itself
+            if safe_hops == 0:
+                return [start_dict]
+
+            # Step 3 — hops≥1: embed safe integer into Cypher (Cypher disallows $param here)
+            cypher = f"""
+                MATCH (s:Station {{station_id: $station_id}})
+                      -[:CONNECTS_TO*1..{safe_hops}]->(affected:Station)
+                RETURN DISTINCT
+                    affected.station_id AS station_id,
+                    affected.name       AS name,
+                    min(length(shortestPath(
+                        (s)-[:CONNECTS_TO*]-(affected)
+                    )))                 AS hops_away,
+                    affected.lines      AS lines_affected
+                ORDER BY hops_away
+            """
+            result = session.run(cypher, station_id=delayed_station_id)
+            neighbours = [
+                {
+                    "station_id": r["station_id"],
+                    "name": r["name"],
+                    "hops_away": r["hops_away"],
+                    "lines_affected": list(r["lines_affected"] or []),
+                }
+                for r in result
+            ]
+            return [start_dict] + neighbours
+    except Exception:
+        return []
 
 
 # ── STATION CONNECTIONS ───────────────────────────────────────────────────────
