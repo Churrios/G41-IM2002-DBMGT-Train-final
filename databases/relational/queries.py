@@ -25,9 +25,11 @@ from __future__ import annotations
 import json
 import random
 import string
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
 
+import bcrypt
 import psycopg2
 import psycopg2.extras
 
@@ -358,15 +360,106 @@ def execute_booking(
         (True, booking_dict)   on success
         (False, error_message) on failure
     """
-    # --- SQL HINT ---
-    # Steps (all in one transaction, conn.autocommit = False):
-    # 1. SELECT stops_travelled = array_position(dest) - array_position(origin) FROM schedule
-    # 2. SELECT fare via query_national_rail_fare logic
-    # 3. INSERT INTO bookings (...) VALUES (...) — booking_id = _gen_booking_id()
-    # 4. INSERT INTO payments (...) — payment_id = _gen_payment_id(), status='paid'
-    # 5. conn.commit()
-    # On any exception: conn.rollback(), return (False, str(e))
-    raise NotImplementedError("TODO: implement after designing your schema")
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch schedule to get stop order, fares, and departure time
+            cur.execute(
+                """
+                SELECT stops_in_order, first_train_time,
+                       std_base_fare_usd, std_per_stop_rate_usd,
+                       first_base_fare_usd, first_per_stop_rate_usd
+                FROM national_rail_schedules
+                WHERE schedule_id = %s
+                """,
+                (schedule_id,),
+            )
+            schedule = cur.fetchone()
+            if schedule is None:
+                return (False, "Schedule not found")
+
+            stops = list(schedule["stops_in_order"])
+            if origin_station_id not in stops or destination_station_id not in stops:
+                return (False, "Stations not on this route")
+            origin_pos = stops.index(origin_station_id)
+            dest_pos = stops.index(destination_station_id)
+            if origin_pos >= dest_pos:
+                return (False, "Invalid route direction")
+            stops_count = dest_pos - origin_pos
+
+            # 2. Calculate fare
+            if fare_class == "first":
+                base = float(schedule["first_base_fare_usd"])
+                per_stop = float(schedule["first_per_stop_rate_usd"])
+            else:
+                base = float(schedule["std_base_fare_usd"])
+                per_stop = float(schedule["std_per_stop_rate_usd"])
+            amount = round(base + per_stop * stops_count, 2)
+
+            # 3. Resolve seat and coach
+            if seat_id == "any":
+                cur.execute(
+                    """
+                    SELECT seat_id, coach FROM seat_layouts
+                    WHERE schedule_id = %s AND fare_class = %s
+                      AND seat_id NOT IN (
+                          SELECT seat_id FROM bookings
+                          WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
+                      )
+                    LIMIT 1
+                    """,
+                    (schedule_id, fare_class, schedule_id, travel_date),
+                )
+                seat_row = cur.fetchone()
+                if seat_row is None:
+                    return (False, "No seats available")
+                resolved_seat_id = seat_row["seat_id"]
+                coach = seat_row["coach"]
+            else:
+                cur.execute(
+                    "SELECT coach FROM seat_layouts WHERE schedule_id = %s AND seat_id = %s",
+                    (schedule_id, seat_id),
+                )
+                seat_row = cur.fetchone()
+                resolved_seat_id = seat_id
+                coach = seat_row["coach"] if seat_row else ""
+
+            # 4. Insert booking
+            booking_id = _gen_booking_id()
+            cur.execute(
+                """
+                INSERT INTO bookings
+                    (booking_id, user_id, schedule_id,
+                     origin_station_id, destination_station_id,
+                     travel_date, departure_time, ticket_type, fare_class,
+                     coach, seat_id, stops_travelled, amount_usd, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'confirmed')
+                RETURNING *
+                """,
+                (booking_id, user_id, schedule_id,
+                 origin_station_id, destination_station_id,
+                 travel_date, schedule["first_train_time"], ticket_type, fare_class,
+                 coach, resolved_seat_id, stops_count, amount),
+            )
+            booking = dict(cur.fetchone())
+
+            # 5. Insert payment — both inserts share one commit (atomic)
+            cur.execute(
+                """
+                INSERT INTO payments (payment_id, booking_id, amount_usd, method, status)
+                VALUES (%s, %s, %s, 'card', 'paid')
+                """,
+                (_gen_payment_id(), booking_id, amount),
+            )
+
+        conn.commit()
+        return (True, booking)
+    except Exception as e:
+        conn.rollback()
+        return (False, str(e))
+    finally:
+        conn.close()
 
 
 def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | str]:
@@ -385,17 +478,93 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
         (True, result_dict)  with refund_amount_usd and policy note
         (False, error_msg)
     """
-    # --- SQL HINT ---
-    # Steps:
-    # 1. SELECT booking + schedule.service_type WHERE booking_id = %s AND user_id = %s
-    # 2. Check status != 'cancelled'
-    # 3. Calculate refund based on hours until travel_date:
-    #    normal service: >48h → 100%, 24-48h → 75%, 12-24h → 50%, <12h → 0%
-    #    express service: >24h → 100%, 12-24h → 50%, <12h → 0%
-    # 4. UPDATE bookings SET status='cancelled', cancelled_at=NOW()
-    # 5. INSERT INTO payments (new row) with negative amount = refund, status='refunded'
-    # 6. conn.commit()
-    raise NotImplementedError("TODO: implement after designing your schema")
+    _POLICY_PATH = Path(__file__).parent.parent.parent / "train-mock-data" / "refund_policy.json"
+    with open(_POLICY_PATH) as f:
+        policies = json.load(f)
+
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch booking joined with schedule to get service_type
+            cur.execute(
+                """
+                SELECT b.*, s.service_type
+                FROM bookings b
+                JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
+                WHERE b.booking_id = %s
+                """,
+                (booking_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return (False, "Booking not found")
+            booking = dict(row)
+
+            # 2. Ownership and status checks
+            if booking["user_id"] != user_id:
+                return (False, "Booking does not belong to this user")
+            if booking["status"] == "cancelled":
+                return (False, "Booking is already cancelled")
+
+            # 3. Calculate hours until departure (timezone-aware)
+            travel_dt = datetime.combine(booking["travel_date"], booking["departure_time"])
+            travel_dt = travel_dt.replace(tzinfo=timezone.utc)
+            hours_until = (travel_dt - datetime.now(tz=timezone.utc)).total_seconds() / 3600
+
+            # 4. Match cancellation window from refund_policy.json
+            service_type = booking["service_type"]
+            policy = next(
+                (p for p in policies if p["applies_to"].get("service_type") == service_type),
+                None,
+            )
+            refund_percent = 0
+            admin_fee = 0.0
+            policy_note = "No refund"
+            if policy:
+                for window in policy["cancellation_windows"]:
+                    min_h = window["hours_before_departure_min"]
+                    max_h = window["hours_before_departure_max"]
+                    if max_h is None:
+                        matches = hours_until >= min_h
+                    else:
+                        matches = min_h <= hours_until < max_h
+                    if matches:
+                        refund_percent = window["refund_percent"]
+                        admin_fee = float(window["admin_fee_usd"])
+                        policy_note = window["label"]
+                        break
+
+            # 5. Refund amount (floor at 0 — admin fee never exceeds refund on 0% windows)
+            amount = float(booking["amount_usd"])
+            refund_amount = max(round(amount * refund_percent / 100 - admin_fee, 2), 0.0)
+
+            # 6. Cancel booking
+            cur.execute(
+                "UPDATE bookings SET status='cancelled', cancelled_at=NOW() WHERE booking_id = %s",
+                (booking_id,),
+            )
+
+            # 7. Insert refund payment record (negative amount = money out to customer)
+            cur.execute(
+                """
+                INSERT INTO payments (payment_id, booking_id, amount_usd, method, status, refunded_at)
+                VALUES (%s, %s, %s, 'card', 'refunded', NOW())
+                """,
+                (_gen_payment_id(), booking_id, -refund_amount),
+            )
+
+        conn.commit()
+        return (True, {
+            "booking_id": booking_id,
+            "refund_amount_usd": refund_amount,
+            "policy_note": policy_note,
+        })
+    except Exception as e:
+        conn.rollback()
+        return (False, str(e))
+    finally:
+        conn.close()
 
 
 # ── AUTHENTICATION QUERIES ────────────────────────────────────────────────────
@@ -413,15 +582,34 @@ def register_user(
     Register a new user.
     Returns (True, user_id) on success or (False, error_message) on failure.
     """
-    # --- SQL HINT ---
-    # import bcrypt
-    # hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    # user_id = "RU" + str(next_id).zfill(3)  OR  "RU-" + random suffix
-    # full_name = first_name + " " + surname
-    # date_of_birth = date(year_of_birth, 1, 1)  (approximate — only year given)
-    # INSERT INTO registered_users (...) ON CONFLICT (email) DO NOTHING
-    # → return (True, user_id) or (False, "Email already registered")
-    raise NotImplementedError("TODO: implement after designing your schema")
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    full_name = f"{first_name} {surname}"
+    dob = date(year_of_birth, 1, 1)
+    user_id = "RU" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO registered_users
+                    (user_id, full_name, email, password, date_of_birth,
+                     secret_question, secret_answer)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (email) DO NOTHING
+                """,
+                (user_id, full_name, email, hashed, dob, secret_question, secret_answer),
+            )
+            inserted = cur.rowcount == 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    if not inserted:
+        return (False, "Email already registered")
+    return (True, user_id)
 
 
 def login_user(email: str, password: str) -> Optional[dict]:
@@ -429,11 +617,20 @@ def login_user(email: str, password: str) -> Optional[dict]:
     Verify credentials. Returns a user dict on success or None on failure.
     Dict keys: user_id, email, full_name, first_name, surname, phone, date_of_birth, is_active.
     """
-    # --- SQL HINT ---
-    # SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE
-    # → bcrypt.checkpw(password.encode(), row['password'].encode())
-    # → return dict(row) if match else None
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE",
+                (email,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    if not bcrypt.checkpw(password.encode(), row["password"].encode()):
+        return None
+    user = dict(row)
+    user.pop("password", None)
+    return user
 
 
 def get_user_secret_question(email: str) -> Optional[str]:
@@ -464,12 +661,23 @@ def verify_secret_answer(email: str, answer: str) -> bool:
 
 def update_password(email: str, new_password: str) -> bool:
     """Update the password for a user. Returns True if the row was updated."""
-    # --- SQL HINT ---
-    # import bcrypt
-    # hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-    # UPDATE registered_users SET password = %s WHERE email = %s
-    # → return cur.rowcount == 1
-    raise NotImplementedError("TODO: implement after designing your schema")
+    hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE registered_users SET password = %s WHERE email = %s",
+                (hashed, email),
+            )
+            updated = cur.rowcount == 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return updated
 
 
 # ── VECTOR / RAG QUERIES — do not modify ─────────────────────────────────────
