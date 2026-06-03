@@ -113,14 +113,32 @@ def query_national_rail_fare(
     Returns:
         dict with fare_class, base_fare_usd, per_stop_rate_usd, total_fare_usd
     """
-    # --- SQL HINT ---
-    # SELECT std_base_fare_usd, std_per_stop_rate_usd,
-    #        first_base_fare_usd, first_per_stop_rate_usd
-    # FROM national_rail_schedules WHERE schedule_id = %s
-    # → 選 fare_class 對應的 base + per_stop
-    # → total = base + per_stop * stops_travelled
-    # → return dict with fare_class, base_fare_usd, per_stop_rate_usd, total_fare_usd
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT std_base_fare_usd, std_per_stop_rate_usd,
+                       first_base_fare_usd, first_per_stop_rate_usd
+                FROM national_rail_schedules
+                WHERE schedule_id = %s
+                """,
+                (schedule_id,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    if fare_class == "first":
+        base = float(row["first_base_fare_usd"])
+        per_stop = float(row["first_per_stop_rate_usd"])
+    else:
+        base = float(row["std_base_fare_usd"])
+        per_stop = float(row["std_per_stop_rate_usd"])
+    return {
+        "fare_class": fare_class,
+        "base_fare_usd": base,
+        "per_stop_rate_usd": per_stop,
+        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+    }
 
 
 # ── METRO SCHEDULES & FARE ────────────────────────────────────────────────────
