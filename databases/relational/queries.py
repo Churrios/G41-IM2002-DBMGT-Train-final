@@ -248,9 +248,14 @@ def auto_select_adjacent_seats(available_seats: list[dict], count: int) -> list[
 
 def query_user_profile(user_email: str) -> Optional[dict]:
     """Return a user's profile by email."""
-    # --- SQL HINT ---
-    # SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE",
+                (user_email,),
+            )
+            row = cur.fetchone()
+    return dict(row) if row is not None else None
 
 
 def query_user_bookings(user_email: str) -> dict:
