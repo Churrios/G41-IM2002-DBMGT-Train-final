@@ -215,16 +215,22 @@ def query_available_seats(
     Returns:
         List of dicts: {seat_id, coach, row, column}
     """
-    # --- SQL HINT ---
-    # SELECT sl.seat_id, sl.coach, sl.row_num, sl.col_char
-    # FROM seat_layouts sl
-    # WHERE sl.schedule_id = %s AND sl.fare_class = %s
-    #   AND sl.seat_id NOT IN (
-    #       SELECT seat_id FROM bookings
-    #       WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
-    #   )
-    # ORDER BY sl.coach, sl.row_num, sl.col_char
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT sl.seat_id, sl.coach, sl.row_num AS row, sl.col_char AS column
+                FROM seat_layouts sl
+                WHERE sl.schedule_id = %s AND sl.fare_class = %s
+                  AND sl.seat_id NOT IN (
+                      SELECT seat_id FROM bookings
+                      WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
+                  )
+                ORDER BY sl.coach, sl.row_num, sl.col_char
+                """,
+                (schedule_id, fare_class, schedule_id, travel_date),
+            )
+            return [dict(row) for row in cur.fetchall()]
 
 
 def auto_select_adjacent_seats(available_seats: list[dict], count: int) -> list[str]:
