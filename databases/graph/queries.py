@@ -182,13 +182,32 @@ def query_alternative_routes(
     Returns:
         List of routes, each route is a list of leg dicts
     """
-    # --- CYPHER HINT ---
-    # MATCH p = (o:Station {station_id: $origin})-[:CONNECTS_TO*1..10]->(d:Station {station_id: $dest})
-    # WHERE NONE(n IN nodes(p) WHERE n.station_id = $avoid_station_id)
-    # RETURN [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
-    #        reduce(t=0, r IN relationships(p) | t + r.travel_time_min) AS total_time
-    # ORDER BY total_time LIMIT $max_routes
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH p = (o:Station {station_id: $origin_id})
+                          -[:CONNECTS_TO*1..10]->
+                          (d:Station {station_id: $dest_id})
+                WHERE NONE(n IN nodes(p) WHERE n.station_id = $avoid_station_id)
+                RETURN
+                    [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
+                    reduce(t = 0, r IN relationships(p) | t + r.travel_time_min)
+                        AS total_time_min
+                ORDER BY total_time_min
+                LIMIT $max_routes
+                """,
+                origin_id=origin_id,
+                dest_id=destination_id,
+                avoid_station_id=avoid_station_id,
+                max_routes=max_routes,
+            )
+            return [
+                {"route": list(record["route"]), "total_time_min": record["total_time_min"]}
+                for record in result
+            ]
+    except Exception:
+        return []
 
 
 # ── CROSS-NETWORK INTERCHANGE PATH ───────────────────────────────────────────
