@@ -29,9 +29,31 @@ from neo4j import GraphDatabase
 from skeleton.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 
 
-def _driver():
-    """Return a Neo4j driver. Caller is responsible for closing."""
-    return GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+# Module-level singleton driver — created once, shared across all queries.
+# Do NOT use `with _DRIVER as driver:` — that closes the driver on context exit.
+# Always obtain a session with `with _get_driver().session() as session:`.
+_DRIVER = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+
+
+def _get_driver():
+    """Return the shared module-level Neo4j driver singleton."""
+    return _DRIVER
+
+
+def _infer_network(station_id: str) -> str:
+    """Infer the transit network from a station ID prefix.
+
+    Args:
+        station_id: e.g. "MS01" or "NR01"
+
+    Returns:
+        "metro", "national_rail", or "unknown"
+    """
+    if station_id.upper().startswith("MS"):
+        return "metro"
+    elif station_id.upper().startswith("NR"):
+        return "national_rail"
+    return "unknown"
 
 
 # ── Example ───────────────────────────────────────────────────────────────────
@@ -39,10 +61,9 @@ def _driver():
 
 def example_count_nodes() -> int:
     """Example: count all nodes currently in the graph."""
-    with _driver() as driver:
-        with driver.session() as session:
-            result = session.run("MATCH (n) RETURN count(n) AS total")
-            return result.single()["total"]
+    with _get_driver().session() as session:
+        result = session.run("MATCH (n) RETURN count(n) AS total")
+        return result.single()["total"]
 
 # TODO: Implement the query_ functions below.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -68,15 +89,45 @@ def query_shortest_route(
         dict with keys: found, origin_id, destination_id,
                         total_time_min, path (list of station dicts), legs
     """
-    # --- CYPHER HINT ---
-    # MATCH (o:Station {station_id: $origin_id}), (d:Station {station_id: $dest_id})
-    # CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min')
-    # YIELD path, weight
-    # RETURN [node in nodes(path) | {station_id: node.station_id, name: node.name}] AS stations,
-    #        [rel in relationships(path) | {line: rel.line, travel_time_min: rel.travel_time_min}] AS legs,
-    #        weight AS total_time_min
-    # → wrap in {"found": bool, "total_time_min": weight, "path": stations, "legs": legs}
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    _not_found = {
+        "found": False,
+        "origin_id": origin_id,
+        "destination_id": destination_id,
+        "total_time_min": None,
+        "path": [],
+        "legs": [],
+    }
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH (o:Station {station_id: $origin_id}),
+                      (d:Station {station_id: $dest_id})
+                CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min')
+                YIELD path, weight
+                RETURN
+                    [node IN nodes(path) |
+                        {station_id: node.station_id, name: node.name}] AS stations,
+                    [rel IN relationships(path) |
+                        {line: rel.line, travel_time_min: rel.travel_time_min}] AS legs,
+                    weight AS total_time_min
+                """,
+                origin_id=origin_id,
+                dest_id=destination_id,
+            )
+            record = result.single()
+            if record is None:
+                return _not_found
+            return {
+                "found": True,
+                "origin_id": origin_id,
+                "destination_id": destination_id,
+                "total_time_min": int(record["total_time_min"]),
+                "path": list(record["stations"]),
+                "legs": list(record["legs"]),
+            }
+    except Exception:
+        return _not_found
 
 
 # ── CHEAPEST ROUTE (Dijkstra by fare) ────────────────────────────────────────
@@ -131,13 +182,32 @@ def query_alternative_routes(
     Returns:
         List of routes, each route is a list of leg dicts
     """
-    # --- CYPHER HINT ---
-    # MATCH p = (o:Station {station_id: $origin})-[:CONNECTS_TO*1..10]->(d:Station {station_id: $dest})
-    # WHERE NONE(n IN nodes(p) WHERE n.station_id = $avoid_station_id)
-    # RETURN [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
-    #        reduce(t=0, r IN relationships(p) | t + r.travel_time_min) AS total_time
-    # ORDER BY total_time LIMIT $max_routes
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH p = (o:Station {station_id: $origin_id})
+                          -[:CONNECTS_TO*1..10]->
+                          (d:Station {station_id: $dest_id})
+                WHERE NONE(n IN nodes(p) WHERE n.station_id = $avoid_station_id)
+                RETURN
+                    [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
+                    reduce(t = 0, r IN relationships(p) | t + r.travel_time_min)
+                        AS total_time_min
+                ORDER BY total_time_min
+                LIMIT $max_routes
+                """,
+                origin_id=origin_id,
+                dest_id=destination_id,
+                avoid_station_id=avoid_station_id,
+                max_routes=max_routes,
+            )
+            return [
+                {"route": list(record["route"]), "total_time_min": record["total_time_min"]}
+                for record in result
+            ]
+    except Exception:
+        return []
 
 
 # ── CROSS-NETWORK INTERCHANGE PATH ───────────────────────────────────────────
@@ -154,14 +224,78 @@ def query_interchange_path(origin_id: str, destination_id: str) -> dict:
     Returns:
         dict with found, stations list, interchange points, total_time_min
     """
-    # --- CYPHER HINT ---
-    # MATCH p = (o:Station {station_id: $origin_id})
-    #           -[:CONNECTS_TO|INTERCHANGE_WITH*1..20]->
-    #           (d:Station {station_id: $dest_id})
-    # WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_WITH')
-    # RETURN nodes(p), relationships(p)
-    # ORDER BY size(nodes(p)) LIMIT 1
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    _not_found: dict = {
+        "found": False,
+        "stations": [],
+        "interchanges": [],
+        "total_time_min": None,
+    }
+    _TRANSFER_TIME = 5  # fixed minutes per INTERCHANGE_WITH hop
+
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH p = (o:Station {station_id: $origin_id})
+                          -[:CONNECTS_TO|INTERCHANGE_WITH*1..20]->
+                          (d:Station {station_id: $dest_id})
+                WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_WITH')
+                RETURN nodes(p) AS path_nodes, relationships(p) AS path_rels
+                ORDER BY length(p)
+                LIMIT 1
+                """,
+                origin_id=origin_id,
+                dest_id=destination_id,
+            )
+            record = result.single()
+            if record is None:
+                return _not_found
+
+            path_nodes = list(record["path_nodes"])
+            path_rels = list(record["path_rels"])
+
+            # --- identify which node indices border an INTERCHANGE_WITH edge ---
+            interchange_node_ids: set[str] = set()
+            interchanges: list[dict] = []
+
+            for i, rel in enumerate(path_rels):
+                if rel.type == "INTERCHANGE_WITH":
+                    from_node = path_nodes[i]
+                    to_node = path_nodes[i + 1]
+                    interchange_node_ids.add(from_node["station_id"])
+                    interchange_node_ids.add(to_node["station_id"])
+                    interchanges.append({
+                        "from": from_node["station_id"],
+                        "to": to_node["station_id"],
+                        "transfer_time_min": _TRANSFER_TIME,
+                    })
+
+            # --- build station list, marking interchange nodes ---
+            stations = [
+                {
+                    "station_id": n["station_id"],
+                    "name": n["name"],
+                    "interchange": n["station_id"] in interchange_node_ids,
+                }
+                for n in path_nodes
+            ]
+
+            # --- total time: sum CONNECTS_TO weights + 5 min per interchange ---
+            travel_time = sum(
+                rel["travel_time_min"]
+                for rel in path_rels
+                if rel.type == "CONNECTS_TO" and rel["travel_time_min"] is not None
+            )
+            total_time_min = travel_time + len(interchanges) * _TRANSFER_TIME
+
+            return {
+                "found": True,
+                "stations": stations,
+                "interchanges": interchanges,
+                "total_time_min": total_time_min,
+            }
+    except Exception:
+        return _not_found
 
 
 # ── DELAY RIPPLE ANALYSIS ─────────────────────────────────────────────────────
@@ -178,13 +312,55 @@ def query_delay_ripple(delayed_station_id: str, hops: int = 2) -> list[dict]:
     Returns:
         List of dicts: {station_id, name, hops_away, lines_affected}
     """
-    # --- CYPHER HINT ---
-    # MATCH (s:Station {station_id: $station_id})-[:CONNECTS_TO*1..$hops]->(affected:Station)
-    # RETURN DISTINCT affected.station_id AS station_id,
-    #        affected.name AS name,
-    #        min(length(path)) AS hops_away,
-    #        affected.lines AS lines_affected
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    try:
+        safe_hops = max(0, int(hops))  # int() conversion prevents injection
+        with _get_driver().session() as session:
+            # Step 1 — always fetch the start node (hops_away=0)
+            start_record = session.run(
+                "MATCH (s:Station {station_id: $sid}) "
+                "RETURN s.station_id AS station_id, s.name AS name, s.lines AS lines_affected",
+                sid=delayed_station_id,
+            ).single()
+            if start_record is None:
+                return []
+
+            start_dict = {
+                "station_id": start_record["station_id"],
+                "name": start_record["name"],
+                "hops_away": 0,
+                "lines_affected": list(start_record["lines_affected"] or []),
+            }
+
+            # Step 2 — hops=0: only the delayed station itself
+            if safe_hops == 0:
+                return [start_dict]
+
+            # Step 3 — hops≥1: embed safe integer into Cypher (Cypher disallows $param here)
+            cypher = f"""
+                MATCH (s:Station {{station_id: $station_id}})
+                      -[:CONNECTS_TO*1..{safe_hops}]->(affected:Station)
+                RETURN DISTINCT
+                    affected.station_id AS station_id,
+                    affected.name       AS name,
+                    min(length(shortestPath(
+                        (s)-[:CONNECTS_TO*]-(affected)
+                    )))                 AS hops_away,
+                    affected.lines      AS lines_affected
+                ORDER BY hops_away
+            """
+            result = session.run(cypher, station_id=delayed_station_id)
+            neighbours = [
+                {
+                    "station_id": r["station_id"],
+                    "name": r["name"],
+                    "hops_away": r["hops_away"],
+                    "lines_affected": list(r["lines_affected"] or []),
+                }
+                for r in result
+            ]
+            return [start_dict] + neighbours
+    except Exception:
+        return []
 
 
 # ── STATION CONNECTIONS ───────────────────────────────────────────────────────
@@ -196,8 +372,20 @@ def query_station_connections(station_id: str) -> list[dict]:
     Args:
         station_id: e.g. "MS01" or "NR01"
     """
-    # --- CYPHER HINT ---
-    # MATCH (s:Station {station_id: $station_id})-[r:CONNECTS_TO]->(n:Station)
-    # RETURN n.station_id AS station_id, n.name AS name,
-    #        r.line AS line, r.travel_time_min AS travel_time_min, r.network AS network
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH (s:Station {station_id: $station_id})-[r:CONNECTS_TO]->(n:Station)
+                RETURN n.station_id AS station_id,
+                       n.name       AS name,
+                       r.line       AS line,
+                       r.travel_time_min AS travel_time_min,
+                       r.network    AS network
+                ORDER BY r.travel_time_min
+                """,
+                station_id=station_id,
+            )
+            return [dict(record) for record in result]
+    except Exception:
+        return []
