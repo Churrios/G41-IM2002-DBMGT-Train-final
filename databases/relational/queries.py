@@ -26,6 +26,7 @@ import json
 import random
 import string
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import bcrypt
@@ -477,17 +478,93 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
         (True, result_dict)  with refund_amount_usd and policy note
         (False, error_msg)
     """
-    # --- SQL HINT ---
-    # Steps:
-    # 1. SELECT booking + schedule.service_type WHERE booking_id = %s AND user_id = %s
-    # 2. Check status != 'cancelled'
-    # 3. Calculate refund based on hours until travel_date:
-    #    normal service: >48h → 100%, 24-48h → 75%, 12-24h → 50%, <12h → 0%
-    #    express service: >24h → 100%, 12-24h → 50%, <12h → 0%
-    # 4. UPDATE bookings SET status='cancelled', cancelled_at=NOW()
-    # 5. INSERT INTO payments (new row) with negative amount = refund, status='refunded'
-    # 6. conn.commit()
-    raise NotImplementedError("TODO: implement after designing your schema")
+    _POLICY_PATH = Path(__file__).parent.parent.parent / "train-mock-data" / "refund_policy.json"
+    with open(_POLICY_PATH) as f:
+        policies = json.load(f)
+
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 1. Fetch booking joined with schedule to get service_type
+            cur.execute(
+                """
+                SELECT b.*, s.service_type
+                FROM bookings b
+                JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
+                WHERE b.booking_id = %s
+                """,
+                (booking_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return (False, "Booking not found")
+            booking = dict(row)
+
+            # 2. Ownership and status checks
+            if booking["user_id"] != user_id:
+                return (False, "Booking does not belong to this user")
+            if booking["status"] == "cancelled":
+                return (False, "Booking is already cancelled")
+
+            # 3. Calculate hours until departure (timezone-aware)
+            travel_dt = datetime.combine(booking["travel_date"], booking["departure_time"])
+            travel_dt = travel_dt.replace(tzinfo=timezone.utc)
+            hours_until = (travel_dt - datetime.now(tz=timezone.utc)).total_seconds() / 3600
+
+            # 4. Match cancellation window from refund_policy.json
+            service_type = booking["service_type"]
+            policy = next(
+                (p for p in policies if p["applies_to"].get("service_type") == service_type),
+                None,
+            )
+            refund_percent = 0
+            admin_fee = 0.0
+            policy_note = "No refund"
+            if policy:
+                for window in policy["cancellation_windows"]:
+                    min_h = window["hours_before_departure_min"]
+                    max_h = window["hours_before_departure_max"]
+                    if max_h is None:
+                        matches = hours_until >= min_h
+                    else:
+                        matches = min_h <= hours_until < max_h
+                    if matches:
+                        refund_percent = window["refund_percent"]
+                        admin_fee = float(window["admin_fee_usd"])
+                        policy_note = window["label"]
+                        break
+
+            # 5. Refund amount (floor at 0 — admin fee never exceeds refund on 0% windows)
+            amount = float(booking["amount_usd"])
+            refund_amount = max(round(amount * refund_percent / 100 - admin_fee, 2), 0.0)
+
+            # 6. Cancel booking
+            cur.execute(
+                "UPDATE bookings SET status='cancelled', cancelled_at=NOW() WHERE booking_id = %s",
+                (booking_id,),
+            )
+
+            # 7. Insert refund payment record (negative amount = money out to customer)
+            cur.execute(
+                """
+                INSERT INTO payments (payment_id, booking_id, amount_usd, method, status, refunded_at)
+                VALUES (%s, %s, %s, 'card', 'refunded', NOW())
+                """,
+                (_gen_payment_id(), booking_id, -refund_amount),
+            )
+
+        conn.commit()
+        return (True, {
+            "booking_id": booking_id,
+            "refund_amount_usd": refund_amount,
+            "policy_note": policy_note,
+        })
+    except Exception as e:
+        conn.rollback()
+        return (False, str(e))
+    finally:
+        conn.close()
 
 
 # ── AUTHENTICATION QUERIES ────────────────────────────────────────────────────
