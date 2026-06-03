@@ -28,6 +28,7 @@ import string
 from datetime import datetime, timezone
 from typing import Optional
 
+import bcrypt
 import psycopg2
 import psycopg2.extras
 
@@ -429,11 +430,20 @@ def login_user(email: str, password: str) -> Optional[dict]:
     Verify credentials. Returns a user dict on success or None on failure.
     Dict keys: user_id, email, full_name, first_name, surname, phone, date_of_birth, is_active.
     """
-    # --- SQL HINT ---
-    # SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE
-    # → bcrypt.checkpw(password.encode(), row['password'].encode())
-    # → return dict(row) if match else None
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE",
+                (email,),
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    if not bcrypt.checkpw(password.encode(), row["password"].encode()):
+        return None
+    user = dict(row)
+    user.pop("password", None)
+    return user
 
 
 def get_user_secret_question(email: str) -> Optional[str]:
@@ -464,12 +474,23 @@ def verify_secret_answer(email: str, answer: str) -> bool:
 
 def update_password(email: str, new_password: str) -> bool:
     """Update the password for a user. Returns True if the row was updated."""
-    # --- SQL HINT ---
-    # import bcrypt
-    # hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-    # UPDATE registered_users SET password = %s WHERE email = %s
-    # → return cur.rowcount == 1
-    raise NotImplementedError("TODO: implement after designing your schema")
+    hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    conn = psycopg2.connect(PG_DSN)
+    conn.autocommit = False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE registered_users SET password = %s WHERE email = %s",
+                (hashed, email),
+            )
+            updated = cur.rowcount == 1
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return updated
 
 
 # ── VECTOR / RAG QUERIES — do not modify ─────────────────────────────────────
