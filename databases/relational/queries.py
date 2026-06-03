@@ -290,15 +290,31 @@ def query_user_bookings(user_email: str) -> dict:
     Returns:
         dict with keys 'national_rail' (list) and 'metro' (list)
     """
-    # --- SQL HINT ---
-    # national rail: SELECT b.*, s.line, s.service_type
-    #   FROM bookings b JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
-    #   WHERE b.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
-    # metro: SELECT m.*, s.line
-    #   FROM metro_travel_history m JOIN metro_schedules s ON m.schedule_id = s.schedule_id
-    #   WHERE m.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
-    # → return {"national_rail": [...], "metro": [...]}
-    raise NotImplementedError("TODO: implement after designing your schema")
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT b.*, s.line, s.service_type
+                FROM bookings b
+                JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
+                WHERE b.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+                """,
+                (user_email,),
+            )
+            nr = [dict(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT m.*, s.line
+                FROM metro_travel_history m
+                JOIN metro_schedules s ON m.schedule_id = s.schedule_id
+                WHERE m.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+                """,
+                (user_email,),
+            )
+            metro = [dict(row) for row in cur.fetchall()]
+
+    return {"national_rail": nr, "metro": metro}
 
 
 def query_payment_info(booking_id: str) -> Optional[dict]:
