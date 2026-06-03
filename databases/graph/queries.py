@@ -224,14 +224,78 @@ def query_interchange_path(origin_id: str, destination_id: str) -> dict:
     Returns:
         dict with found, stations list, interchange points, total_time_min
     """
-    # --- CYPHER HINT ---
-    # MATCH p = (o:Station {station_id: $origin_id})
-    #           -[:CONNECTS_TO|INTERCHANGE_WITH*1..20]->
-    #           (d:Station {station_id: $dest_id})
-    # WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_WITH')
-    # RETURN nodes(p), relationships(p)
-    # ORDER BY size(nodes(p)) LIMIT 1
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    _not_found: dict = {
+        "found": False,
+        "stations": [],
+        "interchanges": [],
+        "total_time_min": None,
+    }
+    _TRANSFER_TIME = 5  # fixed minutes per INTERCHANGE_WITH hop
+
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH p = (o:Station {station_id: $origin_id})
+                          -[:CONNECTS_TO|INTERCHANGE_WITH*1..20]->
+                          (d:Station {station_id: $dest_id})
+                WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_WITH')
+                RETURN nodes(p) AS path_nodes, relationships(p) AS path_rels
+                ORDER BY length(p)
+                LIMIT 1
+                """,
+                origin_id=origin_id,
+                dest_id=destination_id,
+            )
+            record = result.single()
+            if record is None:
+                return _not_found
+
+            path_nodes = list(record["path_nodes"])
+            path_rels = list(record["path_rels"])
+
+            # --- identify which node indices border an INTERCHANGE_WITH edge ---
+            interchange_node_ids: set[str] = set()
+            interchanges: list[dict] = []
+
+            for i, rel in enumerate(path_rels):
+                if rel.type == "INTERCHANGE_WITH":
+                    from_node = path_nodes[i]
+                    to_node = path_nodes[i + 1]
+                    interchange_node_ids.add(from_node["station_id"])
+                    interchange_node_ids.add(to_node["station_id"])
+                    interchanges.append({
+                        "from": from_node["station_id"],
+                        "to": to_node["station_id"],
+                        "transfer_time_min": _TRANSFER_TIME,
+                    })
+
+            # --- build station list, marking interchange nodes ---
+            stations = [
+                {
+                    "station_id": n["station_id"],
+                    "name": n["name"],
+                    "interchange": n["station_id"] in interchange_node_ids,
+                }
+                for n in path_nodes
+            ]
+
+            # --- total time: sum CONNECTS_TO weights + 5 min per interchange ---
+            travel_time = sum(
+                rel["travel_time_min"]
+                for rel in path_rels
+                if rel.type == "CONNECTS_TO" and rel["travel_time_min"] is not None
+            )
+            total_time_min = travel_time + len(interchanges) * _TRANSFER_TIME
+
+            return {
+                "found": True,
+                "stations": stations,
+                "interchanges": interchanges,
+                "total_time_min": total_time_min,
+            }
+    except Exception:
+        return _not_found
 
 
 # ── DELAY RIPPLE ANALYSIS ─────────────────────────────────────────────────────
