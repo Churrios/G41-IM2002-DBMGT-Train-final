@@ -150,13 +150,62 @@ def query_cheapest_route(
     Returns:
         dict with found, total_fare_usd (approximate), stations, legs
     """
-    # --- CYPHER HINT ---
-    # 注意：fare 不存在 edge 上，需用 travel_time_min 作為 proxy
-    # 或者：從 PostgreSQL 取 base_fare + per_stop * stop_count 估算
-    # Cypher: 同 shortest_route，但回傳後在 Python 計算 fare
-    # CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min') ...
-    # → 再 call query_national_rail_fare / query_metro_fare 計算 total_fare_usd
-    raise NotImplementedError("TODO: implement after designing your graph schema")
+    _not_found = {
+        "found": False,
+        "origin_id": origin_id,
+        "destination_id": destination_id,
+        "total_fare_usd": None,
+        "fare_class": fare_class,
+        "path": [],
+        "legs": [],
+    }
+    try:
+        with _get_driver().session() as session:
+            result = session.run(
+                """
+                MATCH (o:Station {station_id: $origin_id}),
+                      (d:Station {station_id: $dest_id})
+                CALL apoc.algo.dijkstra(o, d, 'CONNECTS_TO', 'travel_time_min')
+                YIELD path, weight
+                RETURN
+                    [node IN nodes(path) |
+                        {station_id: node.station_id, name: node.name}] AS stations,
+                    [rel IN relationships(path) |
+                        {line: rel.line, travel_time_min: rel.travel_time_min}] AS legs,
+                    weight AS total_time_min
+                """,
+                origin_id=origin_id,
+                dest_id=destination_id,
+            )
+            record = result.single()
+            if record is None:
+                return _not_found
+
+            path = list(record["stations"])
+            legs = list(record["legs"])
+            stops = max(0, len(path) - 1)
+
+            # The graph has no schedule_id, so fare is estimated from stops × rate.
+            # fare_class only distinguishes national rail (metro has a single flat rate).
+            net = network if network != "auto" else _infer_network(origin_id)
+            if net == "metro":
+                total_fare = round(1.0 + stops * 0.5, 2)
+            elif fare_class == "first":
+                total_fare = round(2.0 + stops * 2.0, 2)
+            else:
+                total_fare = round(2.0 + stops * 1.2, 2)
+
+            return {
+                "found": True,
+                "origin_id": origin_id,
+                "destination_id": destination_id,
+                "total_fare_usd": total_fare,
+                "fare_class": fare_class,
+                "path": path,
+                "legs": legs,
+            }
+    except Exception:
+        return _not_found
 
 
 # ── ALTERNATIVE ROUTES (avoiding a station) ───────────────────────────────────
