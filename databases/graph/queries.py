@@ -29,9 +29,31 @@ from neo4j import GraphDatabase
 from skeleton.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 
 
-def _driver():
-    """Return a Neo4j driver. Caller is responsible for closing."""
-    return GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+# Module-level singleton driver — created once, shared across all queries.
+# Do NOT use `with _DRIVER as driver:` — that closes the driver on context exit.
+# Always obtain a session with `with _get_driver().session() as session:`.
+_DRIVER = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+
+
+def _get_driver():
+    """Return the shared module-level Neo4j driver singleton."""
+    return _DRIVER
+
+
+def _infer_network(station_id: str) -> str:
+    """Infer the transit network from a station ID prefix.
+
+    Args:
+        station_id: e.g. "MS01" or "NR01"
+
+    Returns:
+        "metro", "national_rail", or "unknown"
+    """
+    if station_id.upper().startswith("MS"):
+        return "metro"
+    elif station_id.upper().startswith("NR"):
+        return "national_rail"
+    return "unknown"
 
 
 # ── Example ───────────────────────────────────────────────────────────────────
@@ -39,10 +61,9 @@ def _driver():
 
 def example_count_nodes() -> int:
     """Example: count all nodes currently in the graph."""
-    with _driver() as driver:
-        with driver.session() as session:
-            result = session.run("MATCH (n) RETURN count(n) AS total")
-            return result.single()["total"]
+    with _get_driver().session() as session:
+        result = session.run("MATCH (n) RETURN count(n) AS total")
+        return result.single()["total"]
 
 # TODO: Implement the query_ functions below.
 # ─────────────────────────────────────────────────────────────────────────────
