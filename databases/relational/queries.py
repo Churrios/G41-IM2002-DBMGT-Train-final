@@ -671,6 +671,10 @@ def login_user(email: str, password: str) -> Optional[dict]:
         return None
     user = dict(row)
     user.pop("password", None)
+    # ui.py expects first_name + surname; schema stores full_name only — split here
+    parts = (user.get("full_name") or "").split(" ", 1)
+    user["first_name"] = parts[0]
+    user["surname"]    = parts[1] if len(parts) > 1 else ""
     return user
 
 

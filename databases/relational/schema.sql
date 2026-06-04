@@ -183,7 +183,7 @@ CREATE TABLE bookings (
     seat_id                 VARCHAR(10)   NOT NULL,
     stops_travelled         INT           NOT NULL,
     amount_usd              NUMERIC(8,2)  NOT NULL CHECK (amount_usd >= 0),
-    status                  VARCHAR(15)   NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'travelled')),
+    status                  VARCHAR(15)   NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'completed')),
     booked_at               TIMESTAMPTZ   DEFAULT NOW(),
     travelled_at            TIMESTAMPTZ,
     cancelled_at            TIMESTAMPTZ
@@ -201,7 +201,7 @@ CREATE TABLE metro_travel_history (
     day_pass_ref            VARCHAR(20),
     stops_travelled         INT           NOT NULL DEFAULT 0,
     amount_usd              NUMERIC(8,2)  NOT NULL CHECK (amount_usd >= 0),
-    status                  VARCHAR(15)   NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'travelled')),
+    status                  VARCHAR(15)   NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'completed')),
     purchased_at            TIMESTAMPTZ,
     travelled_at            TIMESTAMPTZ,
     cancelled_at            TIMESTAMPTZ
@@ -276,4 +276,4 @@ CREATE TABLE IF NOT EXISTS policy_documents (
 );
 
 -- Index for fast cosine similarity search
-CREATE INDEX IF NOT EXISTS ON policy_documents USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_policy_documents_embedding ON policy_documents USING hnsw (embedding vector_cosine_ops);

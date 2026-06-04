@@ -11,11 +11,11 @@
 
 | # | 嚴重度 | 負責人 | 問題一句話 |
 |---|--------|--------|-----------|
-| A1 | 🔴 | 蔡晟郁 | `seed_postgres.py` 座位 `fare_class` 讀錯層級 → 整個 seeding 交易 rollback，PG 沒資料 |
-| A2 | 🔴 | 蔡晟郁 | `login_user` 沒回傳 `first_name`/`surname`，但 UI 直接取用 → **登入直接崩潰** |
-| A3 | 🟠 | 蔡晟郁 | `schema.sql` 的 HNSW index 寫法少 index 名稱（`CREATE INDEX IF NOT EXISTS ON ...`）|
-| A4 | 🟠 | 蔡晟郁 | `query_user_profile` 回 `date_of_birth`，評分 B6 期望 `year_of_birth` |
-| A5 | 🟠 | 蔡晟郁 | schema 設計分：FK 無 `ON DELETE`、PK/刪除策略無 comment、stops 用陣列非 junction table |
+| A1 | ✅ | 蔡晟郁 | `seed_postgres.py` 座位 `fare_class` 讀錯層級 → 整個 seeding 交易 rollback，PG 沒資料 |
+| A2 | ✅ | 蔡晟郁 | `login_user` 沒回傳 `first_name`/`surname`，但 UI 直接取用 → **登入直接崩潰** |
+| A3 | ✅ | 蔡晟郁 | `schema.sql` 的 HNSW index 寫法少 index 名稱（`CREATE INDEX IF NOT EXISTS ON ...`）|
+| A4 | ✅ | 蔡晟郁 | `query_user_profile` 回 `date_of_birth`，評分 B6 期望 `year_of_birth` |
+| A5 | ✅ | 蔡晟郁 | schema 設計分：FK 無 `ON DELETE`、PK/刪除策略無 comment、stops 用陣列非 junction table |
 | C1 | 🔴 | 黃謙儒 | Graph schema 仍是 `Station`/`CONNECTS_TO`/`INTERCHANGE_WITH`，評分要 `MetroStation`/`NationalRailStation` + `METRO_LINK`/`RAIL_LINK`/`INTERCHANGE_TO` |
 | C2 | 🟠 | 黃謙儒 | `query_cheapest_route` 用 stops×係數估票價，非圖內邊屬性（Q5=A 已定案要寫入邊）|
 | C3 | 🟡 | 黃謙儒 | rewrite 後 `query_station_connections` 的 `r.network`、driver per-call/singleton 需一併對齊 |
@@ -30,7 +30,7 @@
 
 > 檔案：`databases/relational/schema.sql`、`databases/relational/queries.py`、`skeleton/seed_postgres.py`
 
-### 🔴 A1 — 座位 seeding 讀錯欄位層級，會讓整個 PG seeding 失敗
+### ✅ A1 — 座位 seeding 讀錯欄位層級，會讓整個 PG seeding 失敗
 **檔案**：[skeleton/seed_postgres.py:211-238](../skeleton/seed_postgres.py#L211-L238)（`seed_seat_layouts`）
 
 `national_rail_seat_layouts.json` 的結構是 **`fare_class` 在 coach 層**，seat 只有 `seat_id / row / column`：
@@ -56,7 +56,7 @@ for coach in coaches:
                      seat.get("row"), seat.get("column"), fare_class))
 ```
 
-### 🔴 A2 — `login_user` 缺 `first_name`/`surname`，UI 登入會 KeyError 崩潰
+### ✅ A2 — `login_user` 缺 `first_name`/`surname`，UI 登入會 KeyError 崩潰
 **檔案**：[databases/relational/queries.py:624-642](../databases/relational/queries.py#L624-L642)
 
 `registered_users` 只有 `full_name`（無 `first_name`/`surname`），`login_user` 回傳 `SELECT *` 的 dict，所以**沒有** `first_name`/`surname`。但：
@@ -75,7 +75,7 @@ user["surname"]    = parts[1] if len(parts) > 1 else ""
 return user
 ```
 
-### 🟠 A3 — HNSW index 缺名稱（語法/索引建立風險）
+### ✅ A3 — HNSW index 缺名稱（語法/索引建立風險）
 **檔案**：[databases/relational/schema.sql:234](../databases/relational/schema.sql#L234)
 ```sql
 CREATE INDEX IF NOT EXISTS ON policy_documents USING hnsw (embedding vector_cosine_ops);
@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_policy_documents_embedding
     ON policy_documents USING hnsw (embedding vector_cosine_ops);
 ```
 
-### 🟠 A4 — `query_user_profile` 回 `date_of_birth`，評分期望 `year_of_birth`
+### ✅ A4 — `query_user_profile` 回 `date_of_birth`，評分期望 `year_of_birth`
 **檔案**：[databases/relational/queries.py:276-285](../databases/relational/queries.py#L276-L285)
 評分細則 Live B6 標注：「⚠️ 回傳 `date_of_birth`，評分期望 `year_of_birth`」。
 
@@ -100,7 +100,7 @@ if prof.get("date_of_birth"):
 return prof
 ```
 
-### 🟠 A5 — schema 設計與註解（Task 4 文件 / Code Quality 失分點）
+### ✅ A5 — schema 設計與註解（Task 4 文件 / Code Quality 失分點）
 **檔案**：`databases/relational/schema.sql`
 評分細則 STUDENT_GUIDE_CODE 標注的失分項：
 - **FK cascade 未指定**：所有 `REFERENCES` 都沒寫 `ON DELETE CASCADE/RESTRICT/SET NULL`。建議對 `bookings`/`payments`/`feedback` 等明確指定。
@@ -188,7 +188,7 @@ docs = search_with_rerank(embedding, params["query"], top_k=VECTOR_TOP_K)
 ---
 
 ### 建議修復順序
-1. 🔴 A1、A2（不修就跑不起來 / 登不進去）→ 蔡先處理。
+1. ✅ A1、A2（不修就跑不起來 / 登不進去）→ 蔡已處理。
 2. 🔴 C1（Graph 重寫）→ Chien 依正式開發流程動工。
-3. 🟠 A3、A4、J1 → 各自補上，直接對應評分項。
-4. 🟠 A5、🟡 其餘 → 收尾階段補 schema 細節與註解。
+3. ✅ A3、A4 → 已修。🟠 J1 → 蔣待處理。
+4. ✅ A5、🟡 S2 → 蔡已補 schema 細節與部分註解。

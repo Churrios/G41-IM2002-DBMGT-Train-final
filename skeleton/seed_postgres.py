@@ -222,7 +222,8 @@ def seed_seat_layouts(cur):
         schedule_id = schedule.get("schedule_id")
         coaches = schedule.get("coaches", [])
         for coach in coaches:
-            coach_id = coach.get("coach")
+            coach_id   = coach.get("coach")
+            fare_class = coach.get("fare_class")   # fare_class lives at coach level, not seat level
             seats = coach.get("seats", [])
             for seat in seats:
                 rows.append((
@@ -231,7 +232,7 @@ def seed_seat_layouts(cur):
                     coach_id,
                     seat.get("row"),
                     seat.get("column"),
-                    seat.get("fare_class")
+                    fare_class
                 ))
                 
     inserted = insert_many(cur, "seat_layouts", columns, rows)
