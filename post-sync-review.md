@@ -10,13 +10,13 @@
 
 | 優先 | 項目 |
 |------|------|
-| 🔴 | `schema.sql`：所有 FK 加 `ON DELETE RESTRICT` |
-| 🔴 | `schema.sql`：PK 欄位旁加 comment，說明選 VARCHAR(10) 而非 UUID/SERIAL 的理由 |
-| 🔴 | `schema.sql`：加 comment 說明 soft delete 策略（`is_active`）：選此方式是因 `bookings`/`payments` FK 指向 `user_id`，hard delete 會破壞歷史訂單完整性 |
+| ✅ | `schema.sql`：所有 FK 加 `ON DELETE`（16 條，RESTRICT / SET NULL / CASCADE） |
+| ✅ | `schema.sql`：PK 設計說明 comment（header + 每個表格 PK 欄位） |
+| ✅ | `schema.sql`：soft delete 策略 comment（`is_active` 欄位） |
+| ✅ | `queries.py`：5 個函式加 inline WHY comment |
+| ✅ | 移除 `queries.py:68` TODO scaffold comment |
+| ✅ | `execute_cancellation` metro 邊界確認：agent 層 `cancel_booking` description 已限定 national rail，無需改動 |
 | 🟡 | `schema.sql`：與組員討論是否改用 junction table 取代 `stops_in_order VARCHAR[]`（影響 Task 1 Normalisation 評分） |
-| 🟡 | `queries.py`：3–5 個複雜函式加 inline comment（解釋 WHY，不是 WHAT） |
-| 🟡 | 確認 `execute_cancellation` 在 agent 層是否只對國鐵呼叫（metro booking 會回傳 Not Found） |
-| 🟢 | 移除 `queries.py:68` 殘留 `# TODO: Implement...` scaffold comment |
 
 ### 🟢 黃謙儒（Graph DB）
 

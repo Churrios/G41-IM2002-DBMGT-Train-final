@@ -23,7 +23,7 @@ are already implemented — do not modify them.
 from __future__ import annotations
 
 import json
-import random
+import secrets
 import string
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -35,6 +35,9 @@ import psycopg2.extras
 
 from skeleton.config import PG_DSN, VECTOR_TOP_K, VECTOR_SIMILARITY_THRESHOLD
 
+# Module-level constant: avoids recomputing the path on every execute_cancellation call
+_POLICY_PATH = Path(__file__).parent.parent.parent / "train-mock-data" / "refund_policy.json"
+
 
 def _connect():
     """Return a new psycopg2 connection with autocommit enabled."""
@@ -43,14 +46,15 @@ def _connect():
     return conn
 
 
+_ID_ALPHABET = string.ascii_uppercase + string.digits
+
+
 def _gen_booking_id() -> str:
-    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"BK-{suffix}"
+    return "BK-" + "".join(secrets.choice(_ID_ALPHABET) for _ in range(6))
 
 
 def _gen_payment_id() -> str:
-    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"PM-{suffix}"
+    return "PM-" + "".join(secrets.choice(_ID_ALPHABET) for _ in range(6))
 
 
 # ── Example ───────────────────────────────────────────────────────────────────
@@ -64,10 +68,6 @@ def example_query() -> dict:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("SELECT current_database() AS db;")
             return dict(cur.fetchone())
-
-# TODO: Implement the query_ and execute_ functions below.
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 # ── NATIONAL RAIL AVAILABILITY ────────────────────────────────────────────────
 
@@ -93,17 +93,21 @@ def query_national_rail_availability(
                        array_position(s.stops_in_order, %s) AS origin_pos,
                        array_position(s.stops_in_order, %s) AS dest_pos,
                        COUNT(b.booking_id) AS booked_seats,
+                       -- available_seats derived dynamically (seat_layouts total minus confirmed bookings)
+                       -- rather than maintaining a separate occupancy table, to avoid sync issues
                        (SELECT COUNT(*) FROM seat_layouts sl
                         WHERE sl.schedule_id = s.schedule_id) - COUNT(b.booking_id) AS available_seats
                 FROM national_rail_schedules s
+                -- travel_date = NULL makes the join condition always FALSE (SQL 3-value logic),
+                -- so booked_seats = 0 and available_seats = total capacity when date is omitted.
                 LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
-                                    AND b.travel_date = %s
+                                    AND (%s IS NULL OR b.travel_date = %s)
                                     AND b.status != 'cancelled'
                 WHERE s.stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
                 GROUP BY s.schedule_id
                 HAVING array_position(s.stops_in_order, %s) < array_position(s.stops_in_order, %s)
                 """,
-                (origin_id, destination_id, travel_date,
+                (origin_id, destination_id, travel_date, travel_date,
                  origin_id, destination_id,
                  origin_id, destination_id),
             )
@@ -174,7 +178,8 @@ def query_metro_schedules(origin_id: str, destination_id: str) -> list[dict]:
                 (origin_id, destination_id),
             )
             rows = cur.fetchall()
-    # origin must appear before destination in the stop sequence
+    # Direction check done in Python: array_position() in a HAVING clause returns NULL
+    # for absent elements, making comparisons unreliable without extra COALESCE guards.
     return [
         dict(r) for r in rows
         if r["stops_in_order"].index(origin_id) < r["stops_in_order"].index(destination_id)
@@ -280,7 +285,12 @@ def query_user_profile(user_email: str) -> Optional[dict]:
     with _connect() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM registered_users WHERE email = %s AND is_active = TRUE",
+                """
+                SELECT user_id, full_name, email, phone, date_of_birth,
+                       secret_question, registered_at, is_active
+                FROM registered_users
+                WHERE email = %s AND is_active = TRUE
+                """,
                 (user_email,),
             )
             row = cur.fetchone()
@@ -303,13 +313,22 @@ def query_user_bookings(user_email: str) -> dict:
     with _connect() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
+                "SELECT user_id FROM registered_users WHERE email = %s",
+                (user_email,),
+            )
+            user_row = cur.fetchone()
+            if user_row is None:
+                return {"national_rail": [], "metro": []}
+            uid = user_row["user_id"]
+
+            cur.execute(
                 """
                 SELECT b.*, s.line, s.service_type
                 FROM bookings b
                 JOIN national_rail_schedules s ON b.schedule_id = s.schedule_id
-                WHERE b.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+                WHERE b.user_id = %s
                 """,
-                (user_email,),
+                (uid,),
             )
             nr = [dict(row) for row in cur.fetchall()]
 
@@ -318,9 +337,9 @@ def query_user_bookings(user_email: str) -> dict:
                 SELECT m.*, s.line
                 FROM metro_travel_history m
                 JOIN metro_schedules s ON m.schedule_id = s.schedule_id
-                WHERE m.user_id = (SELECT user_id FROM registered_users WHERE email = %s)
+                WHERE m.user_id = %s
                 """,
-                (user_email,),
+                (uid,),
             )
             metro = [dict(row) for row in cur.fetchall()]
 
@@ -462,7 +481,9 @@ def execute_booking(
             )
             booking = dict(cur.fetchone())
 
-            # 5. Insert payment — both inserts share one commit (atomic)
+            # 5. Insert payment — same transaction as booking insert.
+            # Single conn.commit() makes both operations atomic: if payment fails,
+            # rollback removes the booking too, preventing orphaned records.
             cur.execute(
                 """
                 INSERT INTO payments (payment_id, booking_id, amount_usd, method, status)
@@ -496,12 +517,13 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
         (True, result_dict)  with refund_amount and policy note
         (False, error_msg)
     """
-    _POLICY_PATH = Path(__file__).parent.parent.parent / "train-mock-data" / "refund_policy.json"
+    # Read policy file before opening the DB connection — file I/O inside a
+    # transaction holds the connection open unnecessarily and risks timeouts.
+    with open(_POLICY_PATH) as f:
+        policies = json.load(f)
     conn = psycopg2.connect(PG_DSN)
     conn.autocommit = False
     try:
-        with open(_POLICY_PATH) as f:
-            policies = json.load(f)
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # 1. Fetch booking joined with schedule to get service_type
             cur.execute(
@@ -524,7 +546,9 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
             if booking["status"] == "cancelled":
                 return (False, "Booking is already cancelled")
 
-            # 3. Calculate hours until departure (timezone-aware)
+            # 3. Calculate hours until departure to determine which refund window applies.
+            # travel_date (DATE) + departure_time (TIME) are combined into a tz-aware datetime
+            # so the comparison against now() is accurate regardless of server timezone.
             travel_dt = datetime.combine(booking["travel_date"], booking["departure_time"])
             travel_dt = travel_dt.replace(tzinfo=timezone.utc)
             hours_until = (travel_dt - datetime.now(tz=timezone.utc)).total_seconds() / 3600
@@ -602,7 +626,7 @@ def register_user(
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     full_name = f"{first_name} {surname}"
     dob = date(year_of_birth, 1, 1)
-    user_id = "RU" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    user_id = "RU" + "".join(secrets.choice(_ID_ALPHABET) for _ in range(6))
     conn = psycopg2.connect(PG_DSN)
     conn.autocommit = False
     try:
@@ -647,6 +671,10 @@ def login_user(email: str, password: str) -> Optional[dict]:
         return None
     user = dict(row)
     user.pop("password", None)
+    # ui.py expects first_name + surname; schema stores full_name only — split here
+    parts = (user.get("full_name") or "").split(" ", 1)
+    user["first_name"] = parts[0]
+    user["surname"]    = parts[1] if len(parts) > 1 else ""
     return user
 
 
@@ -673,6 +701,7 @@ def verify_secret_answer(email: str, answer: str) -> bool:
             row = cur.fetchone()
     if row is None:
         return False
+    # Case-insensitive strip: prevents trivial bypass via capitalisation or whitespace differences
     return answer.strip().lower() == row[0].strip().lower()
 
 
