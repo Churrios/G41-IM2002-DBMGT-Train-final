@@ -69,8 +69,9 @@ CREATE TABLE metro_stations (
     station_id                   VARCHAR(10)   PRIMARY KEY,
     name                         TEXT          NOT NULL,
     lines                        VARCHAR(10)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(10)[],
-    is_interchange_metro         BOOLEAN       DEFAULT FALSE,
-    is_interchange_national_rail BOOLEAN       DEFAULT FALSE,
+    -- Boolean flags mirror FK nullability; NOT NULL prevents ambiguous three-value logic
+    is_interchange_metro         BOOLEAN       NOT NULL DEFAULT FALSE,
+    is_interchange_national_rail BOOLEAN       NOT NULL DEFAULT FALSE,
     -- nullable: not every metro station has a rail interchange
     interchange_nr_station_id    VARCHAR(10)
 );
@@ -82,8 +83,8 @@ CREATE TABLE national_rail_stations (
     station_id                   VARCHAR(10)   PRIMARY KEY,
     name                         TEXT          NOT NULL,
     lines                        VARCHAR(10)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(10)[],
-    is_interchange_national_rail BOOLEAN       DEFAULT FALSE,
-    is_interchange_metro         BOOLEAN       DEFAULT FALSE,
+    is_interchange_national_rail BOOLEAN       NOT NULL DEFAULT FALSE,
+    is_interchange_metro         BOOLEAN       NOT NULL DEFAULT FALSE,
     -- nullable: not every rail station has a metro interchange; SET NULL on metro station delete
     interchange_metro_station_id VARCHAR(10)   REFERENCES metro_stations(station_id) ON DELETE SET NULL
 );
@@ -117,8 +118,8 @@ CREATE TABLE metro_schedules (
     last_train_time          TIME          NOT NULL,
     frequency_min            INT           NOT NULL,
     operates_on              VARCHAR(10)[] NOT NULL DEFAULT ARRAY['mon','tue','wed','thu','fri','sat','sun'],
-    base_fare_usd            NUMERIC(6,2)  NOT NULL,
-    per_stop_rate_usd        NUMERIC(6,2)  NOT NULL
+    base_fare_usd            NUMERIC(6,2)  NOT NULL CHECK (base_fare_usd >= 0),
+    per_stop_rate_usd        NUMERIC(6,2)  NOT NULL CHECK (per_stop_rate_usd >= 0)
 );
 
 CREATE INDEX idx_metro_schedules_stops ON metro_schedules USING GIN (stops_in_order);
@@ -138,10 +139,10 @@ CREATE TABLE national_rail_schedules (
     last_train_time           TIME          NOT NULL,
     frequency_min             INT           NOT NULL,
     operates_on               VARCHAR(10)[] NOT NULL DEFAULT ARRAY['mon','tue','wed','thu','fri','sat','sun'],
-    std_base_fare_usd         NUMERIC(6,2)  NOT NULL,
-    std_per_stop_rate_usd     NUMERIC(6,2)  NOT NULL,
-    first_base_fare_usd       NUMERIC(6,2)  NOT NULL,
-    first_per_stop_rate_usd   NUMERIC(6,2)  NOT NULL
+    std_base_fare_usd         NUMERIC(6,2)  NOT NULL CHECK (std_base_fare_usd >= 0),
+    std_per_stop_rate_usd     NUMERIC(6,2)  NOT NULL CHECK (std_per_stop_rate_usd >= 0),
+    first_base_fare_usd       NUMERIC(6,2)  NOT NULL CHECK (first_base_fare_usd >= 0),
+    first_per_stop_rate_usd   NUMERIC(6,2)  NOT NULL CHECK (first_per_stop_rate_usd >= 0)
 );
 
 CREATE INDEX idx_nr_schedules_stops ON national_rail_schedules USING GIN (stops_in_order);
@@ -196,10 +197,10 @@ CREATE TABLE metro_travel_history (
     origin_station_id       VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
     destination_station_id  VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
     travel_date             DATE          NOT NULL,
-    ticket_type             VARCHAR(10)   NOT NULL,
+    ticket_type             VARCHAR(10)   NOT NULL CHECK (ticket_type IN ('single', 'return', 'day_pass')),
     day_pass_ref            VARCHAR(20),
-    stops_travelled         INT,
-    amount_usd              NUMERIC(8,2)  NOT NULL,
+    stops_travelled         INT           NOT NULL DEFAULT 0,
+    amount_usd              NUMERIC(8,2)  NOT NULL CHECK (amount_usd >= 0),
     status                  VARCHAR(15)   NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'travelled')),
     purchased_at            TIMESTAMPTZ,
     travelled_at            TIMESTAMPTZ,
@@ -226,9 +227,10 @@ CREATE TABLE payments (
     -- PK: VARCHAR(20) for generated IDs (e.g. PM-A1B2C3)
     payment_id   VARCHAR(20)   PRIMARY KEY,
     booking_id   VARCHAR(20)   NOT NULL,
+    -- amount_usd may be negative for refunds (money back to customer)
     amount_usd   NUMERIC(8,2)  NOT NULL,
     method       VARCHAR(20)   NOT NULL,
-    status       VARCHAR(15)   NOT NULL,
+    status       VARCHAR(15)   NOT NULL CHECK (status IN ('paid', 'refunded', 'pending', 'failed')),
     paid_at      TIMESTAMPTZ   DEFAULT NOW(),
     refunded_at  TIMESTAMPTZ
 );
