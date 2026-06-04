@@ -146,8 +146,6 @@ def query_cheapest_route(
         # comparing network == "national_rail" literally would never match "auto".
         # Metro weight is fare_usd (single tier); rail has standard/first split.
         net = network if network in ("metro", "national_rail") else _infer_network(origin_id)
-        if net == "rail":
-            net = "national_rail"
 
         if net == "metro":
             weight_prop = "fare_usd"
