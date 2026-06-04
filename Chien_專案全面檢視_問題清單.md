@@ -16,9 +16,9 @@
 | A3 | ✅ | 蔡晟郁 | `schema.sql` 的 HNSW index 寫法少 index 名稱（`CREATE INDEX IF NOT EXISTS ON ...`）|
 | A4 | ✅ | 蔡晟郁 | `query_user_profile` 回 `date_of_birth`，評分 B6 期望 `year_of_birth` |
 | A5 | ✅ | 蔡晟郁 | schema 設計分：FK 無 `ON DELETE`、PK/刪除策略無 comment、stops 用陣列非 junction table |
-| C1 | 🔴 | 黃謙儒 | Graph schema 仍是 `Station`/`CONNECTS_TO`/`INTERCHANGE_WITH`，評分要 `MetroStation`/`NationalRailStation` + `METRO_LINK`/`RAIL_LINK`/`INTERCHANGE_TO` |
-| C2 | 🟠 | 黃謙儒 | `query_cheapest_route` 用 stops×係數估票價，非圖內邊屬性（Q5=A 已定案要寫入邊）|
-| C3 | 🟡 | 黃謙儒 | rewrite 後 `query_station_connections` 的 `r.network`、driver per-call/singleton 需一併對齊 |
+| C1 | ✅ | 黃謙儒 | Graph schema 仍是 `Station`/`CONNECTS_TO`/`INTERCHANGE_WITH`，評分要 `MetroStation`/`NationalRailStation` + `METRO_LINK`/`RAIL_LINK`/`INTERCHANGE_TO` |
+| C2 | ✅ | 黃謙儒 | `query_cheapest_route` 用 stops×係數估票價，非圖內邊屬性（Q5=A 已定案要寫入邊）|
+| C3 | ✅ | 黃謙儒 | rewrite 後 `query_station_connections` 的 `r.network`、driver per-call/singleton 需一併對齊 |
 | J1 | 🟠 | 蔣耀德 | `rag.search_with_rerank` 沒被 `agent.py` 接上，reranking 功能在 Live Testing 不會被觸發 |
 | J2 | 🟡 | 蔣耀德 | embedding 維度（768/3072）與相似度門檻需依實際 provider 驗證 |
 | S1 | 🟡 | 共用 | `config.py` 預設埠（5432/7687）與 docker（5433/7688）不一致，靠 `.env` 補救 |
@@ -115,7 +115,7 @@ return prof
 > 檔案：`databases/graph/queries.py`、`skeleton/seed_neo4j.py`、`databases/graph/seed.cypher`
 > 詳細實作步驟見 [Chien_graph_正式開發流程.md](Chien_graph_正式開發流程.md)（Q1=A 已鎖定）
 
-### 🔴 C1 — Graph schema 命名與評分標準相反（核心重寫）
+### ✅ C1 — Graph schema 命名與評分標準相反（核心重寫）
 **檔案**：[skeleton/seed_neo4j.py](../skeleton/seed_neo4j.py)、[databases/graph/queries.py](../databases/graph/queries.py)、[databases/graph/seed.cypher](../databases/graph/seed.cypher)
 
 現況：單一 `Station` 標籤 + `CONNECTS_TO` + `INTERCHANGE_WITH`。
@@ -129,13 +129,13 @@ return prof
 2. `queries.py`：6 個 `query_*` 函式改走新標籤/關係；`-[:INTERCHANGE_TO]-` 用無向比對。
 3. `seed.cypher`：補可讀 schema/constraint，讓靜態評分 TA 直接看到三種關係。
 
-### 🟠 C2 — `query_cheapest_route` 票價來源（對齊 Q5=A）
+### ✅ C2 — `query_cheapest_route` 票價來源（對齊 Q5=A）
 **檔案**：[databases/graph/queries.py:182-208](../databases/graph/queries.py#L182-L208)
 目前用 `1.0 + stops*0.5`（metro）/`2.0 + stops*1.2|2.0`（rail）在 Python 端估算，`fare_class` 對「路徑選擇」沒有實際影響。評分 C2 要求 fare_class「明顯影響邊權重」。
 
 **修法（Q5=A 已定案）**：seeding 時把票價寫進邊屬性（metro `fare_usd`；rail `fare_standard_usd`/`fare_first_usd`），`query_cheapest_route` 直接用 `apoc.algo.dijkstra` 以該屬性為權重。
 
-### 🟡 C3 — rewrite 連帶要處理的小一致性
+### ✅ C3 — rewrite 連帶要處理的小一致性
 - [queries.py:433](../databases/graph/queries.py#L433) `query_station_connections` 回傳 `r.network`；新 schema 邊上沒有 `network`，改用關係型別或站別前綴判斷。
 - **driver 模式不一致**：現有 `queries.py` 用 module-level singleton（[queries.py:35](../databases/graph/queries.py#L35)），但定案 Q10=維持 per-call。兩者皆可，但要**統一**並加註解說明 production 取捨（影響 Code Quality）。
 - 6 個函式補 3–5 條「為什麼」的 inline 註解（APOC 為何、`hops` 為何要 `int()` 內嵌等）。
