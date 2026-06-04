@@ -417,13 +417,23 @@ def execute_booking(
                 resolved_seat_id = seat_row["seat_id"]
                 coach = seat_row["coach"]
             else:
+                # Verify seat exists and is not already booked
                 cur.execute(
-                    "SELECT coach FROM seat_layouts WHERE schedule_id = %s AND seat_id = %s",
-                    (schedule_id, seat_id),
+                    """
+                    SELECT coach FROM seat_layouts
+                    WHERE schedule_id = %s AND seat_id = %s AND fare_class = %s
+                      AND seat_id NOT IN (
+                          SELECT seat_id FROM bookings
+                          WHERE schedule_id = %s AND travel_date = %s AND status != 'cancelled'
+                      )
+                    """,
+                    (schedule_id, seat_id, fare_class, schedule_id, travel_date),
                 )
                 seat_row = cur.fetchone()
+                if seat_row is None:
+                    return (False, f"Seat {seat_id} is unavailable or does not exist")
                 resolved_seat_id = seat_id
-                coach = seat_row["coach"] if seat_row else ""
+                coach = seat_row["coach"]
 
             # 4. Insert booking
             booking_id = _gen_booking_id()
@@ -479,12 +489,11 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
         (False, error_msg)
     """
     _POLICY_PATH = Path(__file__).parent.parent.parent / "train-mock-data" / "refund_policy.json"
-    with open(_POLICY_PATH) as f:
-        policies = json.load(f)
-
     conn = psycopg2.connect(PG_DSN)
     conn.autocommit = False
     try:
+        with open(_POLICY_PATH) as f:
+            policies = json.load(f)
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             # 1. Fetch booking joined with schedule to get service_type
             cur.execute(
@@ -602,9 +611,9 @@ def register_user(
             )
             inserted = cur.rowcount == 1
         conn.commit()
-    except Exception:
+    except Exception as e:
         conn.rollback()
-        raise
+        return (False, str(e))
     finally:
         conn.close()
     if not inserted:
@@ -674,7 +683,7 @@ def update_password(email: str, new_password: str) -> bool:
         conn.commit()
     except Exception:
         conn.rollback()
-        raise
+        return False
     finally:
         conn.close()
     return updated

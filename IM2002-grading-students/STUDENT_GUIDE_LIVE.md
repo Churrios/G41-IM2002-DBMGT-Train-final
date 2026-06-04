@@ -31,19 +31,34 @@ Static code quality (schema design, function implementation) is assessed separat
 Your seeding scripts must complete without tracebacks and populate all required tables with
 plausible data. Fare columns must store numeric values; foreign keys must reference valid rows.
 
-| Criterion | Max | What earns full marks |
-|-----------|-----|-----------------------|
-| PG seeding: script completes without traceback | 3 | `seed_postgres.py` runs to completion with no Python exception |
-| PG seeding: all required tables contain data | 3 | At least `metro_stations`, `national_rail_stations`, `metro_schedules`, `users`, and `seat_layouts` are populated |
-| PG data integrity: fare columns are numeric; FK references valid | 2 | Fare values stored as numbers (not strings); every FK points to an existing row |
-| Neo4j seeding: script completes without traceback | 3 | `seed_neo4j.py` runs to completion with no exception |
-| Neo4j: station nodes and link relationships present | 2 | Station nodes of both types exist; `METRO_LINK` and `RAIL_LINK` relationships are present |
-| pgvector: `policy_documents` table populated | 2 | `SELECT COUNT(*) FROM policy_documents` returns a value greater than 0 |
-| **Section A Total** | **15** | |
+| Criterion | Max | What earns full marks | 狀態 |
+|-----------|-----|-----------------------|------|
+| PG seeding: script completes without traceback | 3 | `seed_postgres.py` runs to completion with no Python exception | ✅ 已實作 |
+| PG seeding: all required tables contain data | 3 | At least `metro_stations`, `national_rail_stations`, `metro_schedules`, `users`, and `seat_layouts` are populated | ✅ 已實作 |
+| PG data integrity: fare columns are numeric; FK references valid | 2 | Fare values stored as numbers (not strings); every FK points to an existing row | ✅ NUMERIC 型別 |
+| Neo4j seeding: script completes without traceback | 3 | `seed_neo4j.py` runs to completion with no exception | ✅ 已實作 |
+| Neo4j: station nodes and link relationships present | 2 | Station nodes of both types exist; `METRO_LINK` and `RAIL_LINK` relationships are present | ❌ 用 `CONNECTS_TO` 非 `METRO_LINK` |
+| pgvector: `policy_documents` table populated | 2 | `SELECT COUNT(*) FROM policy_documents` returns a value greater than 0 | ✅ 已實作 |
+| **Section A Total** | **15** | | |
 
 ---
 
 ## Section B — PostgreSQL Queries · /50
+
+> 實作狀態總覽（程式碼已實作，live 測試待 Docker 啟動後驗證）
+
+| 函式 | 實作 |
+|------|------|
+| B1 `query_national_rail_availability` | ✅ |
+| B2 `query_metro_schedules` | ✅ |
+| B3 `query_national_rail_fare` | ✅ |
+| B4 `query_metro_fare` | ✅ |
+| B5 `query_available_seats` | ✅ |
+| B6 `query_user_profile` | ✅ ⚠️ 回傳 `date_of_birth`，評分期望 `year_of_birth` |
+| B7 `query_user_bookings` | ✅ |
+| B8 `query_payment_info` | ✅ |
+| B9 `execute_booking` | ✅ |
+| B10 `execute_cancellation` | ✅ |
 
 ---
 
@@ -186,6 +201,17 @@ return `(True, result_dict)`. If the booking is already cancelled, return `(Fals
 ---
 
 ## Section C — Neo4j Routing Queries · /35
+
+> 實作狀態總覽（程式碼已實作，live 測試待 Docker 啟動後驗證）
+
+| 函式 | 實作 |
+|------|------|
+| C1 `query_shortest_route` | ✅ |
+| C2 `query_cheapest_route` | ✅ |
+| C3 `query_alternative_routes` | ✅ |
+| C4 `query_interchange_path` | ⚠️ 用 `INTERCHANGE_WITH`，評分期望 `INTERCHANGE_TO` |
+| C5 `query_delay_ripple` | ✅ |
+| C6 `query_station_connections` | ✅ |
 
 ---
 

@@ -1,4 +1,4 @@
-# AI Session Context — TransitFlow
+# ✅ AI Session Context — TransitFlow
 
 **How to use this file:**
 At the start of every AI coding session, paste the full contents of this file as your first message to your AI assistant. This gives the AI the context it needs to produce code that fits your codebase and is consistent with your teammates' work.

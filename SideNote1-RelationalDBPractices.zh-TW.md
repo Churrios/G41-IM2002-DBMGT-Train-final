@@ -319,14 +319,14 @@ alembic downgrade -1
 
 ## Summary
 
-| Topic | Teaching Code | Production Approach |
-|---|---|---|
-| **Connections** | 每個 query 建立新 connection | Connection pool（psycopg2 pool / PgBouncer） |
-| **SQL location** | Functions 中的 inline strings | ORM、`.sql` files 或 query builder |
-| **I/O model** | Synchronous（blocking） | Async（`asyncpg` + `async`/`await`） |
-| **Passwords** | Plain text | `argon2` 或 `bcrypt` hash |
-| **DB layer structure** | Standalone functions | Repository pattern（classes） |
-| **Schema changes** | Drop and recreate | Versioned migrations（Alembic / Flyway） |
+| Topic | Teaching Code | Production Approach | 本專案狀態 |
+|---|---|---|---|
+| **Connections** | 每個 query 建立新 connection | Connection pool（psycopg2 pool / PgBouncer） | 教學 pattern，符合課程要求 |
+| **SQL location** | Functions 中的 inline strings | ORM、`.sql` files 或 query builder | inline SQL + `%s` placeholder，符合課程要求 |
+| **I/O model** | Synchronous（blocking） | Async（`asyncpg` + `async`/`await`） | synchronous，符合課程要求 |
+| **Passwords** | Plain text | `argon2` 或 `bcrypt` hash | ✅ bcrypt 已實作（register / login / update） |
+| **DB layer structure** | Standalone functions | Repository pattern（classes） | standalone functions，符合課程要求 |
+| **Schema changes** | Drop and recreate | Versioned migrations（Alembic / Flyway） | drop & recreate，符合課程要求 |
 
 這些做法都不是說教學程式碼「錯了」，而是解決只有在 scale 或 security-sensitive contexts 中才會出現的問題。理解每個 practice *為什麼*存在，比死背工具更重要。
 
