@@ -65,10 +65,6 @@ def example_query() -> dict:
             cur.execute("SELECT current_database() AS db;")
             return dict(cur.fetchone())
 
-# TODO: Implement the query_ and execute_ functions below.
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 # ── NATIONAL RAIL AVAILABILITY ────────────────────────────────────────────────
 
 def query_national_rail_availability(
@@ -93,6 +89,8 @@ def query_national_rail_availability(
                        array_position(s.stops_in_order, %s) AS origin_pos,
                        array_position(s.stops_in_order, %s) AS dest_pos,
                        COUNT(b.booking_id) AS booked_seats,
+                       -- available_seats derived dynamically (seat_layouts total minus confirmed bookings)
+                       -- rather than maintaining a separate occupancy table, to avoid sync issues
                        (SELECT COUNT(*) FROM seat_layouts sl
                         WHERE sl.schedule_id = s.schedule_id) - COUNT(b.booking_id) AS available_seats
                 FROM national_rail_schedules s
@@ -174,7 +172,8 @@ def query_metro_schedules(origin_id: str, destination_id: str) -> list[dict]:
                 (origin_id, destination_id),
             )
             rows = cur.fetchall()
-    # origin must appear before destination in the stop sequence
+    # Direction check done in Python: array_position() in a HAVING clause returns NULL
+    # for absent elements, making comparisons unreliable without extra COALESCE guards.
     return [
         dict(r) for r in rows
         if r["stops_in_order"].index(origin_id) < r["stops_in_order"].index(destination_id)
@@ -462,7 +461,9 @@ def execute_booking(
             )
             booking = dict(cur.fetchone())
 
-            # 5. Insert payment — both inserts share one commit (atomic)
+            # 5. Insert payment — same transaction as booking insert.
+            # Single conn.commit() makes both operations atomic: if payment fails,
+            # rollback removes the booking too, preventing orphaned records.
             cur.execute(
                 """
                 INSERT INTO payments (payment_id, booking_id, amount_usd, method, status)
@@ -524,7 +525,9 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
             if booking["status"] == "cancelled":
                 return (False, "Booking is already cancelled")
 
-            # 3. Calculate hours until departure (timezone-aware)
+            # 3. Calculate hours until departure to determine which refund window applies.
+            # travel_date (DATE) + departure_time (TIME) are combined into a tz-aware datetime
+            # so the comparison against now() is accurate regardless of server timezone.
             travel_dt = datetime.combine(booking["travel_date"], booking["departure_time"])
             travel_dt = travel_dt.replace(tzinfo=timezone.utc)
             hours_until = (travel_dt - datetime.now(tz=timezone.utc)).total_seconds() / 3600
@@ -673,6 +676,7 @@ def verify_secret_answer(email: str, answer: str) -> bool:
             row = cur.fetchone()
     if row is None:
         return False
+    # Case-insensitive strip: prevents trivial bypass via capitalisation or whitespace differences
     return answer.strip().lower() == row[0].strip().lower()
 
 

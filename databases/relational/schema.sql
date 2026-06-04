@@ -28,20 +28,33 @@
 --    docker-compose down -v && docker-compose up -d
 -- ============================================================
 
+-- PK design: VARCHAR(10/20) chosen over UUID/SERIAL throughout.
+-- IDs are short, human-readable, and match the JSON mock data format
+-- (e.g. RU001, NR01, MS_SCH01). Single-region system with no distributed
+-- insert contention, so collision-resistant UUIDs are unnecessary overhead.
+
 -- ============================================================
 --  1. USERS
 -- ============================================================
 
 CREATE TABLE registered_users (
+    -- PK: VARCHAR(10) matches mock data format (e.g. RU001, RUA1B2C3)
     user_id          VARCHAR(10)   PRIMARY KEY,
     full_name        TEXT          NOT NULL,
     email            VARCHAR(200)  NOT NULL UNIQUE,
+    -- password stores the full bcrypt hash string (salt embedded, no separate column needed)
     password         TEXT          NOT NULL,
     phone            VARCHAR(20),
+    -- only year is collected (data minimisation — month/day not required by any feature)
     date_of_birth    DATE,
     secret_question  TEXT,
     secret_answer    TEXT,
     registered_at    TIMESTAMPTZ   DEFAULT NOW(),
+    -- Soft delete: set is_active = FALSE instead of hard DELETE.
+    -- Hard DELETE would cascade-break FK references in bookings and metro_travel_history,
+    -- destroying historical records needed for auditing and tax compliance.
+    -- In production a delete request would also anonymise PII columns (full_name, email, phone)
+    -- while retaining booking records per statutory retention obligations.
     is_active        BOOLEAN       DEFAULT TRUE
 );
 
@@ -52,31 +65,38 @@ CREATE TABLE registered_users (
 -- ============================================================
 
 CREATE TABLE metro_stations (
+    -- PK: VARCHAR(10) matches mock data format (e.g. MS01)
     station_id                   VARCHAR(10)   PRIMARY KEY,
     name                         TEXT          NOT NULL,
     lines                        VARCHAR(10)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(10)[],
     is_interchange_metro         BOOLEAN       DEFAULT FALSE,
     is_interchange_national_rail BOOLEAN       DEFAULT FALSE,
+    -- nullable: not every metro station has a rail interchange
     interchange_nr_station_id    VARCHAR(10)
 );
 
 CREATE INDEX idx_metro_stations_lines ON metro_stations USING GIN (lines);
 
 CREATE TABLE national_rail_stations (
+    -- PK: VARCHAR(10) matches mock data format (e.g. NR01)
     station_id                   VARCHAR(10)   PRIMARY KEY,
     name                         TEXT          NOT NULL,
     lines                        VARCHAR(10)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(10)[],
     is_interchange_national_rail BOOLEAN       DEFAULT FALSE,
     is_interchange_metro         BOOLEAN       DEFAULT FALSE,
-    interchange_metro_station_id VARCHAR(10)   REFERENCES metro_stations(station_id)
+    -- nullable: not every rail station has a metro interchange; SET NULL on metro station delete
+    interchange_metro_station_id VARCHAR(10)   REFERENCES metro_stations(station_id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_national_rail_stations_lines ON national_rail_stations USING GIN (lines);
 
+-- Deferred cross-reference: metro_stations → national_rail_stations
+-- SET NULL: removing a rail station should not invalidate the metro station row
 ALTER TABLE metro_stations
     ADD CONSTRAINT fk_interchange_nr
     FOREIGN KEY (interchange_nr_station_id)
-    REFERENCES national_rail_stations(station_id);
+    REFERENCES national_rail_stations(station_id)
+    ON DELETE SET NULL;
 
 -- ============================================================
 --  3. SCHEDULES
@@ -85,11 +105,12 @@ ALTER TABLE metro_stations
 -- ============================================================
 
 CREATE TABLE metro_schedules (
+    -- PK: VARCHAR(20) for longer schedule IDs (e.g. MS_SCH01)
     schedule_id              VARCHAR(20)   PRIMARY KEY,
     line                     VARCHAR(5)    NOT NULL,
     direction                VARCHAR(15)   NOT NULL,
-    origin_station_id        VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id),
-    destination_station_id   VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id),
+    origin_station_id        VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
+    destination_station_id   VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
     stops_in_order           VARCHAR(10)[] NOT NULL,
     travel_time_from_origin  JSONB         NOT NULL,
     first_train_time         TIME          NOT NULL,
@@ -103,12 +124,13 @@ CREATE TABLE metro_schedules (
 CREATE INDEX idx_metro_schedules_stops ON metro_schedules USING GIN (stops_in_order);
 
 CREATE TABLE national_rail_schedules (
+    -- PK: VARCHAR(20) for longer schedule IDs (e.g. NR_SCH01)
     schedule_id               VARCHAR(20)   PRIMARY KEY,
     line                      VARCHAR(10)   NOT NULL,
     service_type              VARCHAR(10)   NOT NULL,
     direction                 VARCHAR(15)   NOT NULL,
-    origin_station_id         VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id),
-    destination_station_id    VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id),
+    origin_station_id         VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
+    destination_station_id    VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
     stops_in_order            VARCHAR(10)[] NOT NULL,
     passed_through_stations   VARCHAR(10)[],
     travel_time_from_origin   JSONB         NOT NULL,
@@ -130,7 +152,9 @@ CREATE INDEX idx_nr_schedules_stops ON national_rail_schedules USING GIN (stops_
 -- ============================================================
 
 CREATE TABLE seat_layouts (
-    schedule_id  VARCHAR(20)  NOT NULL REFERENCES national_rail_schedules(schedule_id),
+    -- Composite PK: (schedule_id, seat_id) is naturally unique; no surrogate key needed.
+    -- CASCADE: seats belong to a schedule and should be removed when the schedule is deleted.
+    schedule_id  VARCHAR(20)  NOT NULL REFERENCES national_rail_schedules(schedule_id) ON DELETE CASCADE,
     seat_id      VARCHAR(10)  NOT NULL,
     coach        VARCHAR(5)   NOT NULL,
     row_num      INT          NOT NULL,
@@ -144,11 +168,12 @@ CREATE TABLE seat_layouts (
 -- ============================================================
 
 CREATE TABLE bookings (
+    -- PK: VARCHAR(20) for generated IDs (e.g. BK-A1B2C3)
     booking_id              VARCHAR(20)   PRIMARY KEY,
-    user_id                 VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id),
-    schedule_id             VARCHAR(20)   NOT NULL REFERENCES national_rail_schedules(schedule_id),
-    origin_station_id       VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id),
-    destination_station_id  VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id),
+    user_id                 VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id) ON DELETE RESTRICT,
+    schedule_id             VARCHAR(20)   NOT NULL REFERENCES national_rail_schedules(schedule_id) ON DELETE RESTRICT,
+    origin_station_id       VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
+    destination_station_id  VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
     travel_date             DATE          NOT NULL,
     departure_time          TIME          NOT NULL,
     ticket_type             VARCHAR(10)   NOT NULL,
@@ -164,11 +189,12 @@ CREATE TABLE bookings (
 );
 
 CREATE TABLE metro_travel_history (
+    -- PK: VARCHAR(20) for generated IDs (e.g. MT-A1B2C3)
     trip_id                 VARCHAR(20)   PRIMARY KEY,
-    user_id                 VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id),
-    schedule_id             VARCHAR(20)   NOT NULL REFERENCES metro_schedules(schedule_id),
-    origin_station_id       VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id),
-    destination_station_id  VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id),
+    user_id                 VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id) ON DELETE RESTRICT,
+    schedule_id             VARCHAR(20)   NOT NULL REFERENCES metro_schedules(schedule_id) ON DELETE RESTRICT,
+    origin_station_id       VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
+    destination_station_id  VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
     travel_date             DATE          NOT NULL,
     ticket_type             VARCHAR(10)   NOT NULL,
     day_pass_ref            VARCHAR(20),
@@ -186,6 +212,7 @@ CREATE TABLE metro_travel_history (
 -- ============================================================
 
 CREATE TABLE payments (
+    -- PK: VARCHAR(20) for generated IDs (e.g. PM-A1B2C3)
     payment_id   VARCHAR(20)   PRIMARY KEY,
     booking_id   VARCHAR(20)   NOT NULL,
     amount_usd   NUMERIC(8,2)  NOT NULL,
@@ -201,9 +228,11 @@ CREATE TABLE payments (
 -- ============================================================
 
 CREATE TABLE feedback (
+    -- PK: VARCHAR(20) for generated IDs (e.g. FB-A1B2C3)
     feedback_id   VARCHAR(20)   PRIMARY KEY,
     booking_id    VARCHAR(20)   NOT NULL,
-    user_id       VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id),
+    -- SET NULL: feedback records are preserved anonymously if a user is deleted
+    user_id       VARCHAR(10)   REFERENCES registered_users(user_id) ON DELETE SET NULL,
     rating        SMALLINT      NOT NULL CHECK (rating BETWEEN 1 AND 5),
     comment       TEXT,
     submitted_at  TIMESTAMPTZ   DEFAULT NOW()
