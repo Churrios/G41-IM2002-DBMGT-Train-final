@@ -27,4 +27,9 @@ def rerank(query_text: str, results: list[dict], top_k: int = 5) -> list[dict]:
     pairs = [(query_text, r["content"]) for r in results]
     scores = model.predict(pairs)
     ranked = sorted(zip(scores, results), key=lambda x: x[0], reverse=True)
-    return [r for _, r in ranked[:top_k]]
+    out_results = []
+    for score, r in ranked[:top_k]:
+        new_r = r.copy()
+        new_r["rerank_score"] = float(score)
+        out_results.append(new_r)
+    return out_results
