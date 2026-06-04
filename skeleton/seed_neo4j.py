@@ -90,7 +90,8 @@ def seed():
             print(f"  Merged {len(rail_stations)} NationalRailStation nodes")
 
             # ── METRO_LINK relationships ──────────────────────────────────────
-            # fare_usd is stored on each edge so Dijkstra can use it as a weight
+            # fare_usd is stored on each edge so Dijkstra can use it as a weight.
+            # Metro has a single fare tier (no first/standard split) — flat rate per hop.
             metro_edges = []
             for s in metro_stations:
                 t = s["travel_time_min"] if "travel_time_min" in s else None

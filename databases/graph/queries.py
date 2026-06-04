@@ -143,7 +143,8 @@ def query_cheapest_route(
     }
     try:
         # _infer_network is used because the agent always passes network="auto";
-        # comparing network == "national_rail" literally would never match.
+        # comparing network == "national_rail" literally would never match "auto".
+        # Metro weight is fare_usd (single tier); rail has standard/first split.
         net = network if network in ("metro", "national_rail") else _infer_network(origin_id)
         if net == "rail":
             net = "national_rail"
