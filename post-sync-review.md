@@ -1,41 +1,40 @@
-# Post-Sync Review — 蔡晟郁 檢查紀錄
+# Post-Sync Review — TransitFlow 整合檢查
 
-> 檢查時間：2026-06-03 | 範圍：Sync 2 完成後全專案整合確認
-
----
-
-## 一、實作完成度
-
-| 負責人 | 狀態 | 說明 |
-|--------|------|------|
-| 蔡晟郁（Relational） | ✅ | 15 個函式全部實作，agent.py tool call 簽名吻合 |
-| 黃謙儒（Graph） | ✅ | 6 個函式全部實作 |
-| 蔣耀德（Vector） | ⚠️ | 4 模組完成，但 `embed()` 快取未實作（見下） |
+> 更新：2026-06-04 | 範圍：Sync 2 完成後 + 課堂討論整合
 
 ---
 
-## 二、Code Review 問題（PR #13）
+## 一、行動清單
 
-### 🔴 已修正
-- `execute_cancellation`：`open()` 已移入 `try` 內 ✅
-- `register_user`：DB 異常改回傳 `(False, str(e))` ✅
-- `update_password`：DB 異常改回傳 `False` ✅
-- `execute_booking`：指定 seat_id 時加入可用性驗證 ✅
+### 🔵 蔡晟郁（Relational DB）
 
-### 🟡 待確認
-- `execute_cancellation`：JOIN 只對 `national_rail_schedules`，metro booking 會回傳 "Booking not found"（agent 層應只對國鐵呼叫，需確認）
+| 優先 | 項目 |
+|------|------|
+| 🔴 | `schema.sql`：所有 FK 加 `ON DELETE RESTRICT` |
+| 🔴 | `schema.sql`：PK 欄位旁加 comment，說明選 VARCHAR(10) 而非 UUID/SERIAL 的理由 |
+| 🔴 | `schema.sql`：加 comment 說明 soft delete 策略（`is_active`）：選此方式是因 `bookings`/`payments` FK 指向 `user_id`，hard delete 會破壞歷史訂單完整性 |
+| 🟡 | `schema.sql`：與組員討論是否改用 junction table 取代 `stops_in_order VARCHAR[]`（影響 Task 1 Normalisation 評分） |
+| 🟡 | `queries.py`：3–5 個複雜函式加 inline comment（解釋 WHY，不是 WHAT） |
+| 🟡 | 確認 `execute_cancellation` 在 agent 層是否只對國鐵呼叫（metro booking 會回傳 Not Found） |
+| 🟢 | 移除 `queries.py:68` 殘留 `# TODO: Implement...` scaffold comment |
 
-### 🟢 已知但不修
-- `execute_booking` race condition（無 `SELECT FOR UPDATE`）：學校專題可接受
-- 連線風格不統一（read-only 用 `_connect()`，write 用手動 `psycopg2.connect()`）：功能正確，不改
+### 🟢 黃謙儒（Graph DB）
 
----
+| 優先 | 項目 |
+|------|------|
+| 🔴 | `seed_neo4j.py`：`Station` → `MetroStation` / `NationalRailStation` |
+| 🔴 | `seed_neo4j.py`：`CONNECTS_TO` → `METRO_LINK`（捷運）/ `RAIL_LINK`（國鐵） |
+| 🔴 | `seed_neo4j.py`：`INTERCHANGE_WITH` → `INTERCHANGE_TO`；同時加上 `travel_time_min` 屬性（目前無此屬性，Dijkstra 讀不到權重；建議設 5 分鐘，規格未強制） |
+| 🔴 | `graph/queries.py`：所有 Cypher 同步更新至新 label / relationship 名稱 |
+| 🟡 | `query_cheapest_route`：評估 `fare_class` 是否需影響 Dijkstra edge weight（目前只影響最後費用計算） |
+| 🟢 | 移除 `graph/queries.py:68` 殘留 `# TODO: Implement...` scaffold comment |
 
-## 三、蔣的 embed() 快取問題
+### 🟣 蔣耀德（Vector / LLM）
 
-`lru_cache` 只有 import，未套用。`embed()` 是 instance method，無法直接加 `@lru_cache`。
+| 優先 | 項目 |
+|------|------|
+| 🟡 | `llm_provider.py`：補 `embed()` module-level cache（`lru_cache` 已 import 但未套用；instance method 無法直接加裝飾器，改用 module-level dict） |
 
-**修法（方案 A）**：
 ```python
 _embed_cache: dict[str, tuple[float, ...]] = {}
 
@@ -47,108 +46,132 @@ def embed(self, text: str) -> List[float]:
     return result
 ```
 
+### 👥 三人共同
+
+| 優先 | 項目 |
+|------|------|
+| 🔴 | **Design Document**：撰寫六章節（建議分工：蔡 Sec1+2，黃 Sec3，蔣 Sec4，三人共 Sec5+6） |
+| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Peer Review**：每人各自填 `PEER_REVIEW_TEMPLATE.md` |
+| 🔴 | **本機環境設定**（Steps 2–12）：至少一人跑通全套 seed scripts，確認 live testing 可執行 |
+| 🟡 | 黃改好 graph schema 後，蔡同步更新 `AI_SESSION_CONTEXT.md`（中英兩版） |
+
 ---
 
-## 四、評分風險
+## 二、繳交項目狀態
 
-### Task 4 — Neo4j Graph Design /8 ❌ 高風險
+| 項目 | 方式 | 狀態 |
+|------|------|------|
+| Code Repository | GitHub repo link → EEClass | ✅ |
+| Design Document | Markdown/PDF → EEClass | ❌ 未開始 |
+| Work Allocation Report | `WORK_ALLOCATION_TEMPLATE.md` → EEClass | ❌ 未填 |
+| Peer Review Report | 每人個別填 → EEClass（保密） | ❌ 未填 |
 
-| 評分標準要求 | 我們的實作 |
-|---|---|
-| `MetroStation` / `NationalRailStation` labels | 單一 `Station` label |
-| `METRO_LINK` / `RAIL_LINK` 關係 | `CONNECTS_TO` |
-| `INTERCHANGE_TO` 關係 | `INTERCHANGE_WITH` |
+---
 
-→ 8 分整個歸零風險，需討論是否修改 seed_neo4j.py
+## 三、評分風險
 
-### Task 1 — Relational Schema /40 四個扣分點
+| 項目 | 評分標準要求 | 我們的狀態 | 風險 |
+|------|------------|-----------|------|
+| Task 4 Graph Design /8 | `MetroStation` / `METRO_LINK` / `INTERCHANGE_TO` | `Station` / `CONNECTS_TO` / `INTERCHANGE_WITH` | 🔴 整組歸零 |
+| Task 1 Normalisation | junction table for stops | `VARCHAR[]` array | 🔴 扣分 |
+| Task 1 FK cascade | `ON DELETE` 明確指定 | 未指定 | 🔴 扣分 |
+| Task 1 PK comment | 說明選型理由 | 無 comment | 🔴 扣分 |
+| Task 1 Delete strategy | comment 說明 soft delete | 無 comment | 🔴 扣分 |
+| Live A Neo4j | `METRO_LINK` / `RAIL_LINK` | `CONNECTS_TO` | 🔴 2 分 |
+| Live C4 interchange path | 走 `INTERCHANGE_TO` | 走 `INTERCHANGE_WITH` | 🔴 部分分數 |
+| Code Quality /2 | 3–5 個函式有 inline comment | 幾乎無 | 🟡 失 1 分 |
+| Task 5 C2 cheapest route | `fare_class` 影響 Dijkstra 路徑 | 只影響最後費用計算 | 🟡 可能扣 1–2 分 |
+
+---
+
+## 四、已修正記錄
 
 | 問題 | 說明 |
 |------|------|
-| Normalisation ❌ | 評分要求 junction table，我們用 `VARCHAR[]` array |
-| PK design comment ❌ | 未說明為何選 VARCHAR(10) 而非 UUID/SERIAL |
-| Delete strategy comment ❌ | `is_active` 存在但無 comment 說明 soft delete |
-| FK cascade ❌ | 所有 FK 未指定 `ON DELETE RESTRICT/CASCADE/SET NULL` |
+| `execute_cancellation` open() 在 try 外 | 移入 try ✅ |
+| `register_user` / `update_password` 異常處理 | 改回傳值而非 raise ✅ |
+| `execute_booking` 無 seat 可用性驗證 | 加入 NOT IN 子查詢 ✅ |
+| `execute_cancellation` 回傳 key `refund_amount_usd` | 改為 `refund_amount` ✅ |
+| `query_user_profile` 未含 `year_of_birth` | 補 `date_of_birth.year` ✅ |
+| `query_national_rail_availability` 只回傳 `booked_seats` | 補 `available_seats` 子查詢 ✅ |
 
-### Code Quality /2 ⚠️
-queries.py 幾乎無 inline comment，可能失去 1 分
-
----
-
-## 五、文件補齊
-
-| 檔案 | 狀態 |
-|------|------|
-| `AI_SESSION_CONTEXT.md` | ✅ 原本已完整 |
-| `AI_SESSION_CONTEXT.zh-TW.md` | ✅ 今日補齊 |
-| `TEAM.md` | ✅ 今日更新三人完整姓名 |
-| `SideNote1-RelationalDBPractices.zh-TW.md` | ✅ 加入本專案狀態欄 |
-| `README.md` / `README.zh-TW.md` | ✅ Your Tasks 打勾 |
+**已知但不修（學校專題可接受）：**
+- `execute_booking` race condition（無 `SELECT FOR UPDATE`）
+- 連線風格不統一（read-only 用 `_connect()`，write 用手動連線）
 
 ---
 
-## 六、本機執行環境（未設定）
+## 五、Design Document 寫作參考
 
-- [ ] 複製 `.env.example` → `.env`，填入 LLM 設定
-- [ ] 建立 venv + `pip install -r requirements.txt`
-- [ ] 啟動 Docker：`docker compose up -d`
-- [ ] 執行三支 seed 腳本（postgres / neo4j / vectors）
-- [ ] 啟動 UI，用 README Try These Queries 驗證
+### Section 1 — ER Diagram /25
+- 關係線上**必須有基數標記**（1:N / M:N），缺少 → 0 分
+- 需使用工具繪製（dbdiagram.io、draw.io、Lucidchart）
+
+### Section 2 — Normalisation /20
+
+**bcrypt 必寫三點：**
+1. 不需獨立 salt 欄：bcrypt 以 CSPRNG 生成 salt 並嵌入 hash 字串（`$2b$12$<salt><hash>`），`checkpw()` 自動解析
+2. salt 每次隨機：確保相同密碼 → 不同 hash，使彩虹表（預算好的密碼↔hash 對照表）無效
+3. bcrypt 優於 MD5/SHA-1：前者有 cost factor（可調計算成本），後者設計目標是「快速」，暴力破解成本低
+
+**其他設計決策（各選一個說明 functional dependency）：**
+- soft delete 選擇：`is_active` 保留 `bookings`/`payments` FK 完整性；hard delete 會破壞歷史訂單
+- available seats 動態計算：不建 occupancy table，避免與 bookings 不同步的一致性問題；RAG table 同理不嚴格正規化（寫少讀多，整批 chunk 更新）
+- 年份資料最小化：只存 `year_of_birth`，避免收集系統不需要的月日個資
+
+### Section 3 — Graph Rationale /25
+- 說明 nodes / relationships / properties 各自的選型理由（不能只說「站是物件所以是 node」）
+- **具體演算法論證**：Dijkstra on graph vs SQL recursive CTE（必寫，泛泛說「graph 比較快」只得 20% 分數）
+- 說明兩種 query 類型（如 shortest path + delay ripple）及 graph model 如何讓它們可表達
+- node identity：用什麼 property 做唯一識別（`station_id`）及為何
+- interchange `travel_time_min = 5` 是自訂合理值（規格未指定，教授確認可自訂）
+
+### Section 4 — Vector / RAG /15
+- cosine similarity 為何適合：magnitude-independent，度量向量方向相似性
+- 完整 RAG pipeline 四階段：query embedding → similarity search → retrieved docs → LLM prompt → answer
+- embedding dimension：768（Ollama nomic-embed-text）/ 3072（Gemini）；換 provider 後果：dimension mismatch → index 失效，必須重新 seed
+- 兩層正規化：DB 層（chunk + embedding）+ pipeline 層（`_normalise_result()` 將 JSON 轉結構文字給 1b 模型）
+
+### Section 5 — AI Tool Usage /10
+- 需 3–5 例，每例必須有 **Context + Prompt + Outcome** 三欄（缺任一欄扣分）
+- **至少一例描述 AI 輸出錯誤** + 如何識別 + 如何修正（可用 Old Town station 語意歧義 → 呼叫錯誤 tool → 改題目描述解決）
+
+### Section 6 — Reflection /5
+**設計決策（列兩個）：**
+- soft delete vs hard delete（理由：FK 完整性 + 法規保留義務）
+- 只存 year_of_birth（理由：資料最小化，系統無使用月日的功能）
+- 不建 occupancy table（理由：一致性優先於效能，未來可加 index 或 Redis）
+
+**生產環境差異（列一個）：**
+- 個資刪除請求應採兩階段：PII 欄位去識別化（null/匿名），但 `bookings`/`payments` 依稅務/會計法規保留
 
 ---
 
-## 七、新發現：三份獨立繳交項目
+## 六、Live Testing 注意事項
 
-> 來源：`STUDENT_GUIDE.md` — 三個評分系統各 /100 獨立計分
+**TA 有額外測試題，範例題只是基礎**（教授明確說明）。
 
-| 項目 | 繳交方式 | 狀態 |
-|------|---------|------|
-| **Code Repository** | GitHub repo link → EEClass | ✅ repo 已建立 |
-| **Design Document** | Markdown → EEClass | ❌ **完全未開始** |
-| **Work Allocation Report** | 填寫 `WORK_ALLOCATION_TEMPLATE.md` → EEClass | ❌ 未填寫 |
-| **Peer Review Report** | 每人個別填寫 `PEER_REVIEW_TEMPLATE.md` → EEClass | ❌ 未填寫 |
-
-### Design Document 需要的六個章節（/100）
-
-| 章節 | 分數 | 狀態 |
-|------|------|------|
-| Section 1 — ER Diagram | /25 | ❌ |
-| Section 2 — Normalisation Justification | /20 | ❌ |
-| Section 3 — Graph Database Design Rationale | /25 | ❌ |
-| Section 4 — Vector / RAG Design | /15 | ❌ |
-| Section 5 — AI Tool Usage Evidence | /10 | ❌ |
-| Section 6 — Reflection & Trade-offs | /5 | ❌ |
+**範例題 Q4 陷阱**：`If Old Town station (NR03) is closed...` → llama3.2:1b 把 "Old Town" 對應 MS07 而非 NR03，呼叫 `query_interchange_path` 而非 `query_alternative_routes`。
+- 自測時改成：`If Old Town junction (NR03) is closed...` 可正確觸發
+- 教授立場：**不建議針對範例題調 agent.py prompt**（不計分 + 影響泛化能力）
+- 應對方式：自訂內部測試題組，覆蓋各 query function
 
 ---
 
-### Live Testing 新發現問題（STUDENT_GUIDE_LIVE.md）
+## 七、本機環境設定步驟
 
-| 項目 | 問題 | 分數風險 |
-|------|------|---------|
-| Section A：Neo4j relationship 檢查 | 評分期望 `METRO_LINK`/`RAIL_LINK`，我們用 `CONNECTS_TO` | 2 分 |
-| B6：`query_user_profile` | 評分期望回傳 `year_of_birth`，schema 存的是 `date_of_birth` | 需確認 |
-| C4：`query_interchange_path` | 評分期望 `INTERCHANGE_TO` edges，我們用 `INTERCHANGE_WITH` | 部分分數 |
-
----
-
-## 八、待辦事項
-
-### 🔴 緊急（影響整個評分系統）
-- [ ] **Design Document**：開始撰寫六個章節（Section 1–6）
-- [ ] **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md`
-- [ ] **Peer Review**：三人各自填寫 `PEER_REVIEW_TEMPLATE.md`
-
-### 🔴 高風險（評分直接扣分）
-- [ ] **Task 4 / Live A**：討論是否修改 graph schema 命名符合評分（`MetroStation`/`METRO_LINK`/`INTERCHANGE_TO`）
-- [ ] **Live B6**：確認 `query_user_profile` 回傳是否包含 `year_of_birth`
-
-### 🟡 中等風險
-- [ ] **Task 1 FK cascade**：所有 FK 加上 `ON DELETE RESTRICT`
-- [ ] **Task 1 PK comment**：schema.sql PK 欄位加設計決策說明
-- [ ] **Task 1 Delete strategy**：加 comment 說明 soft delete
-- [ ] **Task 1 Normalisation**：討論是否改用 junction table
-- [ ] **Code Quality**：queries.py 非顯而易見函式加 inline comment
-
-### 🟢 低優先
-- [ ] **蔣**：確認是否補 commit 修正 `embed()` 快取
-- [ ] **execute_cancellation**：確認 metro booking 邊界
+| # | 步驟 | 狀態 |
+|---|------|------|
+| 1 | Clone repo | ✅ |
+| 2 | `python3 -m venv .venv` | ❌ |
+| 3 | `source .venv/bin/activate` | ❌ |
+| 4 | `pip install -r requirements.txt` | ❌ |
+| 5 | 複製 `.env.example` → `.env`；port 衝突時**只改 `.env`，不動 `config.py`** | ❌ |
+| 6 | `docker compose up -d` | ❌ |
+| 7 | `docker compose ps`（確認 healthy） | ❌ |
+| 8 | `python3 skeleton/seed_postgres.py` | ❌ |
+| 9 | `ollama serve`（先確認 server 跑起來）→ `ollama pull llama3.2:1b` + `nomic-embed-text` | ❌ |
+| 10 | `python3 skeleton/seed_vectors.py` | ❌ |
+| 11 | `python3 skeleton/seed_neo4j.py`（需等黃完成 schema 改動） | ❌ |
+| 12 | `python3 skeleton/ui.py` | ❌ |

@@ -92,7 +92,9 @@ def query_national_rail_availability(
                 SELECT s.*,
                        array_position(s.stops_in_order, %s) AS origin_pos,
                        array_position(s.stops_in_order, %s) AS dest_pos,
-                       COUNT(b.booking_id) AS booked_seats
+                       COUNT(b.booking_id) AS booked_seats,
+                       (SELECT COUNT(*) FROM seat_layouts sl
+                        WHERE sl.schedule_id = s.schedule_id) - COUNT(b.booking_id) AS available_seats
                 FROM national_rail_schedules s
                 LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
                                     AND b.travel_date = %s
@@ -282,7 +284,13 @@ def query_user_profile(user_email: str) -> Optional[dict]:
                 (user_email,),
             )
             row = cur.fetchone()
-    return dict(row) if row is not None else None
+    if row is None:
+        return None
+    user = dict(row)
+    # grading expects year_of_birth; schema stores date_of_birth
+    if user.get("date_of_birth"):
+        user["year_of_birth"] = user["date_of_birth"].year
+    return user
 
 
 def query_user_bookings(user_email: str) -> dict:
@@ -485,7 +493,7 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
         user_id:    must match the booking's user_id
 
     Returns:
-        (True, result_dict)  with refund_amount_usd and policy note
+        (True, result_dict)  with refund_amount and policy note
         (False, error_msg)
     """
     _POLICY_PATH = Path(__file__).parent.parent.parent / "train-mock-data" / "refund_policy.json"
@@ -566,7 +574,7 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
         conn.commit()
         return (True, {
             "booking_id": booking_id,
-            "refund_amount_usd": refund_amount,
+            "refund_amount": refund_amount,
             "policy_note": policy_note,
         })
     except Exception as e:
