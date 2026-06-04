@@ -383,7 +383,8 @@ def _execute_tool(
 
         elif tool_name == "search_policy":
             embedding = llm.embed(params["query"])
-            docs = query_policy_vector_search(embedding)
+            from skeleton.rag import search_with_rerank
+            docs = search_with_rerank(embedding, params["query"])
             result = [
                 {
                     "title":      d["title"],
