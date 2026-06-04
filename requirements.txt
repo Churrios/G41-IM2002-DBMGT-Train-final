@@ -14,3 +14,4 @@ gradio>=4.36.0
 
 # Utilities
 python-dotenv>=1.0.0         # Load .env file
+bcrypt>=4.0.0                # Password hashing

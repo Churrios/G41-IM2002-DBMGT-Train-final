@@ -1,7 +1,6 @@
 # TransitFlow — Intelligent Rail Assistant
-hahahahaha
-> **Course starter project** — your job is to build the databases that power this AI assistant.
-> The AI pipeline, web interface, and database connections are already wired up and working.
+
+## For marking schemes and what to submit for your final project, please refer to [https://github.com/NCUIM-Lab710-Teaching/IM2002-grading-students/](https://github.com/NCUIM-Lab710-Teaching/IM2002-grading-students/tree/main).
 
 ---
 
@@ -713,15 +712,15 @@ All source data lives in the `train-mock-data/` folder as structured JSON files.
 
 **Required — you must edit these files to complete the project:**
 
-| File | What to do |
-|---|---|
-| `skeleton/seed_postgres.py` | Implement each `seed_*` function to load JSON data into your PostgreSQL tables |
-| `skeleton/seed_neo4j.py` | Implement the `seed()` function to create station nodes and rail link relationships in Neo4j |
-| `databases/relational/schema.sql` | Design and write the table definitions (DDL) for all relational data |
-| `databases/relational/queries.py` | Add Python functions that query your PostgreSQL tables |
-| `databases/graph/seed.cypher` | Define the graph topology — station nodes and the links between them |
-| `databases/graph/queries.py` | Add Python functions that run Cypher queries against Neo4j |
-| `train-mock-data/refund_policy.json`, `ticket_types.json`, `booking_rules.json`, `travel_policies.json` | Add or extend policy entries so the assistant can answer more policy questions |
+| File | What to do | Status |
+|---|---|---|
+| `skeleton/seed_postgres.py` | Implement each `seed_*` function to load JSON data into your PostgreSQL tables | ✅ 10 functions, ON CONFLICT DO NOTHING |
+| `skeleton/seed_neo4j.py` | Implement the `seed()` function to create station nodes and rail link relationships in Neo4j | ✅ Done, uses MERGE |
+| `databases/relational/schema.sql` | Design and write the table definitions (DDL) for all relational data | ✅ 7 tables + indexes + FKs |
+| `databases/relational/queries.py` | Add Python functions that query your PostgreSQL tables | ✅ 15 functions implemented |
+| `databases/graph/seed.cypher` | Define the graph topology — station nodes and the links between them | ⚠️ Deprecated — seeding done via seed_neo4j.py |
+| `databases/graph/queries.py` | Add Python functions that run Cypher queries against Neo4j | ✅ 6 functions implemented |
+| `train-mock-data/refund_policy.json`, `ticket_types.json`, `booking_rules.json`, `travel_policies.json` | Add or extend policy entries so the assistant can answer more policy questions | ⚠️ 使用原始提供的內容，未額外擴充 |
 
 **Optional — edit these to add extended features:**
 
@@ -1347,3 +1346,4 @@ python skeleton/seed_vectors.py
 - Any locally generated data exports or dump files.
 
 Before pushing, run `git status` and `git diff --staged` to confirm you are only committing files from `databases/`.
+hahahahah
