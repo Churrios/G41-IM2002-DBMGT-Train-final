@@ -22,18 +22,18 @@
 
 | 優先 | 項目 |
 |------|------|
-| 🔴 | `seed_neo4j.py`：`Station` → `MetroStation` / `NationalRailStation` |
-| 🔴 | `seed_neo4j.py`：`CONNECTS_TO` → `METRO_LINK`（捷運）/ `RAIL_LINK`（國鐵） |
-| 🔴 | `seed_neo4j.py`：`INTERCHANGE_WITH` → `INTERCHANGE_TO`；同時加上 `travel_time_min` 屬性（目前無此屬性，Dijkstra 讀不到權重；建議設 5 分鐘，規格未強制） |
-| 🔴 | `graph/queries.py`：所有 Cypher 同步更新至新 label / relationship 名稱 |
-| 🟡 | `query_cheapest_route`：評估 `fare_class` 是否需影響 Dijkstra edge weight（目前只影響最後費用計算） |
-| 🟢 | 移除 `graph/queries.py:68` 殘留 `# TODO: Implement...` scaffold comment |
+| ✅ | `seed_neo4j.py`：`Station` → `MetroStation` / `NationalRailStation` |
+| ✅ | `seed_neo4j.py`：`CONNECTS_TO` → `METRO_LINK`（捷運）/ `RAIL_LINK`（國鐵） |
+| ✅ | `seed_neo4j.py`：`INTERCHANGE_WITH` → `INTERCHANGE_TO`；加上 `transfer_time_min=5` 屬性 |
+| ✅ | `graph/queries.py`：所有 Cypher 同步更新至新 label / relationship 名稱 |
+| ✅ | `query_cheapest_route`：fare_usd / fare_standard_usd / fare_first_usd 寫入邊屬性，Dijkstra 直接使用 |
+| ✅ | `query_station_connections`：移除 `r.network`，改用關係型別判斷 |
 
 ### 🟣 蔣耀德（Vector / LLM）
 
 | 優先 | 項目 |
 |------|------|
-| 🟡 | `llm_provider.py`：補 `embed()` module-level cache（`lru_cache` 已 import 但未套用；instance method 無法直接加裝飾器，改用 module-level dict） |
+| ✅ | `llm_provider.py`：補 `embed()` module-level `_embed_cache` dict |
 
 ```python
 _embed_cache: dict[str, tuple[float, ...]] = {}
@@ -73,15 +73,15 @@ def embed(self, text: str) -> List[float]:
 
 | 項目 | 評分標準要求 | 我們的狀態 | 風險 |
 |------|------------|-----------|------|
-| Task 4 Graph Design /8 | `MetroStation` / `METRO_LINK` / `INTERCHANGE_TO` | `Station` / `CONNECTS_TO` / `INTERCHANGE_WITH` | 🔴 整組歸零 |
-| Task 1 Normalisation | junction table for stops | `VARCHAR[]` array | 🔴 扣分 |
-| Task 1 FK cascade | `ON DELETE` 明確指定 | 未指定 | 🔴 扣分 |
-| Task 1 PK comment | 說明選型理由 | 無 comment | 🔴 扣分 |
-| Task 1 Delete strategy | comment 說明 soft delete | 無 comment | 🔴 扣分 |
-| Live A Neo4j | `METRO_LINK` / `RAIL_LINK` | `CONNECTS_TO` | 🔴 2 分 |
-| Live C4 interchange path | 走 `INTERCHANGE_TO` | 走 `INTERCHANGE_WITH` | 🔴 部分分數 |
-| Code Quality /2 | 3–5 個函式有 inline comment | 幾乎無 | 🟡 失 1 分 |
-| Task 5 C2 cheapest route | `fare_class` 影響 Dijkstra 路徑 | 只影響最後費用計算 | 🟡 可能扣 1–2 分 |
+| Task 4 Graph Design /8 | `MetroStation` / `METRO_LINK` / `INTERCHANGE_TO` | ✅ 已完成 | ✅ |
+| Task 1 Normalisation | junction table for stops | `VARCHAR[]` array（設計取捨） | 🟡 可能扣分 |
+| Task 1 FK cascade | `ON DELETE` 明確指定 | ✅ 已補全 | ✅ |
+| Task 1 PK comment | 說明選型理由 | ✅ 已補 | ✅ |
+| Task 1 Delete strategy | comment 說明 soft delete | ✅ 已補 | ✅ |
+| Live A Neo4j | `METRO_LINK` / `RAIL_LINK` | ✅ 已完成 | ✅ |
+| Live C4 interchange path | 走 `INTERCHANGE_TO` | ✅ 已完成 | ✅ |
+| Code Quality /2 | 3–5 個函式有 inline comment | ✅ 已補 WHY comments | ✅ |
+| Task 5 C2 cheapest route | `fare_class` 影響 Dijkstra 路徑 | ✅ 邊屬性已寫入，Dijkstra 直接使用 | ✅ |
 
 ---
 
