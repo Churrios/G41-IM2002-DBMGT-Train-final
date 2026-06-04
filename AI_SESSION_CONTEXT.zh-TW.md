@@ -259,42 +259,62 @@ registered_users
 
 ## Agreed Graph Schema
 
-> **狀態：已確認 2026-05-28 — 蔣組員 + Antigravity AI 投票通過。**
-> Q1 單一 Station label ✓ | Q2 CONNECTS_TO + network 屬性 ✓ | Q3 INTERCHANGE_WITH 作為邊 ✓
+> **狀態：已確認 2026-06-04 — 採 Q1=A 分離標籤模型，對齊評分標準。**
+> Q1 分離標籤 MetroStation / NationalRailStation ✓ | Q2 METRO_LINK / RAIL_LINK ✓ | Q3 INTERCHANGE_TO（雙向）✓ | Q5 票價寫入邊屬性 ✓
 
 ```
 節點標籤：
-  Station
+  MetroStation（捷運站）
     屬性：
-      station_id   String  （例："MS01"、"NR01"）
-      name         String
-      network      String  （"metro" | "national_rail"）
-      lines        List<String>  （例：["M1", "M2"]）
+      station_id                    String   （例："MS01"）── 節點唯一識別、加 unique constraint
+      name                          String   （例："Central Square"）
+      lines                         List<String>  （例：["M1", "M2"]）
+      is_interchange_national_rail  Boolean  （true 代表可換乘國鐵站）
 
-  （不拆分為 MetroStation / NationalRailStation —
-   單一 label 讓 Cypher 查詢統一，network 可透過 WHERE s.network = '...' 篩選）
+  NationalRailStation（國鐵站）
+    屬性：
+      station_id                    String   （例："NR01"）── 節點唯一識別、加 unique constraint
+      name                          String   （例："Central Station"）
+      lines                         List<String>  （例：["NR1", "NR2"]）
+      is_interchange_metro          Boolean
+      interchange_metro_station_id  String   （對應捷運站 ID，或 null）
+
+  （採分離標籤而非單一 Station，是為對齊評分標準 ——
+   Task 4 / Live A 會明文檢查兩種 label 是否存在。）
 
 關係類型：
-  CONNECTS_TO
-    方向：(a:Station)-[:CONNECTS_TO]->(b:Station)
+  METRO_LINK   (MetroStation)-[:METRO_LINK]->(MetroStation)
     屬性：
-      line              String   （所屬路線）
+      line              String
       travel_time_min   Integer
-      network           String   （"metro" | "national_rail"）
+      fare_usd          Float  ── round(1.0 + 0.5 × travel_time_min, 2)；捷運單一票價，無 fare_class 之分
 
-  INTERCHANGE_WITH
-    方向：(metro:Station)-[:INTERCHANGE_WITH]->(nr:Station)（實際雙向）
-    屬性：（無 — 邊的存在即代表可換乘）
+  RAIL_LINK    (NationalRailStation)-[:RAIL_LINK]->(NationalRailStation)
+    屬性：
+      line                String
+      travel_time_min     Integer
+      fare_standard_usd   Float  ── round(2.0 + 1.2 × travel_time_min, 2)
+      fare_first_usd      Float  ── round(2.0 + 2.0 × travel_time_min, 2)
+
+  INTERCHANGE_TO  (MetroStation)-[:INTERCHANGE_TO]-(NationalRailStation)
+    屬性：
+      transfer_time_min   Integer  ── 固定 5 分鐘（規格未強制；教授確認可自訂合理值）
+    注意：seeding 建雙向兩條 directed edge（metro→rail 與 rail→metro），
+          查詢用無向 -[:INTERCHANGE_TO]-。
 ```
 
 ### 設計理由
 
 | 決策 | 選擇 | 理由 |
 |---|---|---|
-| 單一 `Station` label | ✓ | 最短路徑查詢可跨兩個網路，不需 UNION |
-| 節點加 `network` 屬性 | ✓ | 在 WHERE 子句篩選網路，不靠 label match |
-| `CONNECTS_TO` 有方向 | ✓ | 模擬時刻表方向；雙向通行 = 兩條邊 |
-| `INTERCHANGE_WITH` 獨立類型 | ✓ | 讓 `query_interchange_path` 可明確追蹤換乘邊 |
+| 分離 `MetroStation` / `NationalRailStation` | ✓ | 對齊評分標準（Task 4 / Live A 以 label 名稱明文檢查） |
+| `METRO_LINK` / `RAIL_LINK` 分開 | ✓ | 各自把票價模型掛在邊上；路徑查詢可限定 `'METRO_LINK\|RAIL_LINK'` 維持同網 |
+| 票價在 seeding 寫進邊（Q5=A） | ✓ | `apoc.algo.dijkstra` 直接用票價屬性當權重，fare_class 真正影響路徑選擇（Live C2），而非只改最後總額 |
+| `INTERCHANGE_TO` 雙向、`transfer_time_min=5` | ✓ | 只有 `query_interchange_path` 會走它（跨網）；shortest/cheapest 刻意不含它，使同網不可達時回 found=False |
+| 以 `station_id` 作節點識別 | ✓ | 每個 label 一條 unique constraint；來源 JSON 的穩定外部鍵 |
+
+拓撲統計：30 節點（20 MetroStation + 10 NationalRailStation），
+66 邊（42 METRO_LINK + 18 RAIL_LINK + 6 INTERCHANGE_TO）。
 
 ## Function Signatures We Are Implementing
 
@@ -345,7 +365,7 @@ def query_station_connections(station_id: str) -> list[dict]: ...
 - [x] **2026-05-28** 密碼儲存：`registered_users.password` **只存 bcrypt hash**，絕對不種明文。在 `seed_postgres.py` 中使用 `bcrypt.hashpw()`。
 - [x] **2026-05-28** `travel_time_from_origin` 以 **JSONB map** 儲存 `{"station_id": minutes}`，不另開 junction table。理由：唯讀查詢、不需 join，JSON key 即為 station_id。
 - [x] **2026-05-28** `stops_in_order` 與 `lines` 以 **`VARCHAR(10)[]`** 儲存，使用 `@>`（contains）與 `array_position()` 查詢。避免為有序站點清單另開 junction table。
-- [x] **2026-05-28** Graph schema 確認：單一 `Station` label，`CONNECTS_TO {line, travel_time_min, network}`，`INTERCHANGE_WITH` 作為明確雙向邊。統計：30 個節點（15 metro + 15 NR），66 條邊（36 metro + 26 NR CONNECTS_TO + 4 INTERCHANGE_WITH）。
+- [x] **2026-06-04** Graph schema 遷移至分離標簽模型（Q1=A）：`MetroStation` / `NationalRailStation`，`METRO_LINK {line, travel_time_min, fare_usd}` / `RAIL_LINK {line, travel_time_min, fare_standard_usd, fare_first_usd}`，`INTERCHANGE_TO {transfer_time_min:5}`（雙向）。統計：30 節點（20 metro + 10 NR），66 邊（42 METRO_LINK + 18 RAIL_LINK + 6 INTERCHANGE_TO）。取代 2026-05-28 的單一 Station 設計。
 
 ## Prompts That Worked
 

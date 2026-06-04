@@ -94,7 +94,6 @@ def seed():
             # Metro has a single fare tier (no first/standard split) — flat rate per hop.
             metro_edges = []
             for s in metro_stations:
-                t = s["travel_time_min"] if "travel_time_min" in s else None
                 for adj in s.get("adjacent_stations", []):
                     t = adj["travel_time_min"]
                     metro_edges.append({

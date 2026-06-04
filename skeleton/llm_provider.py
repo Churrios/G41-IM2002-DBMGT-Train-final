@@ -15,7 +15,6 @@ Students: You do NOT need to change this file.
 from __future__ import annotations
 import requests
 from typing import List
-from functools import lru_cache
 from google import genai
 from google.genai import types
 
@@ -24,8 +23,6 @@ from skeleton.config import (
     GEMINI_API_KEY, GEMINI_CHAT_MODEL, GEMINI_EMBED_MODEL, GEMINI_EMBED_DIM,
     OLLAMA_BASE_URL, OLLAMA_CHAT_MODEL, OLLAMA_EMBED_MODEL, OLLAMA_EMBED_DIM, OLLAMA_TIMEOUT,
 )
-
-_embed_cache: dict[str, tuple[float, ...]] = {}
 
 
 class LLMProvider:
@@ -143,11 +140,10 @@ class LLMProvider:
         return self._ollama_chat(messages, system_prompt)
 
     def embed(self, text: str) -> List[float]:
-        if text in _embed_cache:
-            return list(_embed_cache[text])
-        result = self._ollama_embed(text) if self._embed_provider == "ollama" else self._gemini_embed(text)
-        _embed_cache[text] = tuple(result)
-        return result
+        # Uses the provider set at startup — must match the model used to seed the vectors
+        if self._embed_provider == "ollama":
+            return self._ollama_embed(text)
+        return self._gemini_embed(text)
 
     # ── Gemini internals ───────────────────────────────────────────────────
 
