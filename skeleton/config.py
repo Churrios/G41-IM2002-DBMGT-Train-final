@@ -42,4 +42,4 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "transitflow")
 
 # ── RAG settings ──────────────────────────────────────────────────────────────
 VECTOR_TOP_K           = int(os.getenv("VECTOR_TOP_K", "3"))       # How many policy chunks to retrieve
-VECTOR_SIMILARITY_THRESHOLD = float(os.getenv("VECTOR_SIMILARITY_THRESHOLD", "0.5"))
+VECTOR_SIMILARITY_THRESHOLD = float(os.getenv("VECTOR_SIMILARITY_THRESHOLD", "0.3"))
