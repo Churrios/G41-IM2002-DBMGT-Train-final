@@ -55,7 +55,7 @@ CREATE TABLE registered_users (
     -- destroying historical records needed for auditing and tax compliance.
     -- In production a delete request would also anonymise PII columns (full_name, email, phone)
     -- while retaining booking records per statutory retention obligations.
-    is_active        BOOLEAN       DEFAULT TRUE
+    is_active        BOOLEAN       NOT NULL DEFAULT TRUE
 );
 
 -- ============================================================
@@ -127,7 +127,7 @@ CREATE TABLE national_rail_schedules (
     -- PK: VARCHAR(20) for longer schedule IDs (e.g. NR_SCH01)
     schedule_id               VARCHAR(20)   PRIMARY KEY,
     line                      VARCHAR(10)   NOT NULL,
-    service_type              VARCHAR(10)   NOT NULL,
+    service_type              VARCHAR(10)   NOT NULL CHECK (service_type IN ('normal', 'express')),
     direction                 VARCHAR(15)   NOT NULL,
     origin_station_id         VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
     destination_station_id    VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
@@ -159,7 +159,7 @@ CREATE TABLE seat_layouts (
     coach        VARCHAR(5)   NOT NULL,
     row_num      INT          NOT NULL,
     col_char     VARCHAR(5)   NOT NULL,
-    fare_class   VARCHAR(10)  NOT NULL,
+    fare_class   VARCHAR(10)  NOT NULL CHECK (fare_class IN ('standard', 'first')),
     PRIMARY KEY (schedule_id, seat_id)
 );
 
@@ -176,13 +176,13 @@ CREATE TABLE bookings (
     destination_station_id  VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
     travel_date             DATE          NOT NULL,
     departure_time          TIME          NOT NULL,
-    ticket_type             VARCHAR(10)   NOT NULL,
-    fare_class              VARCHAR(10)   NOT NULL,
+    ticket_type             VARCHAR(10)   NOT NULL CHECK (ticket_type IN ('single', 'return')),
+    fare_class              VARCHAR(10)   NOT NULL CHECK (fare_class IN ('standard', 'first')),
     coach                   VARCHAR(5)    NOT NULL,
     seat_id                 VARCHAR(10)   NOT NULL,
     stops_travelled         INT           NOT NULL,
-    amount_usd              NUMERIC(8,2)  NOT NULL,
-    status                  VARCHAR(15)   NOT NULL,
+    amount_usd              NUMERIC(8,2)  NOT NULL CHECK (amount_usd >= 0),
+    status                  VARCHAR(15)   NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'travelled')),
     booked_at               TIMESTAMPTZ   DEFAULT NOW(),
     travelled_at            TIMESTAMPTZ,
     cancelled_at            TIMESTAMPTZ
@@ -200,11 +200,22 @@ CREATE TABLE metro_travel_history (
     day_pass_ref            VARCHAR(20),
     stops_travelled         INT,
     amount_usd              NUMERIC(8,2)  NOT NULL,
-    status                  VARCHAR(15)   NOT NULL,
+    status                  VARCHAR(15)   NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'travelled')),
     purchased_at            TIMESTAMPTZ,
     travelled_at            TIMESTAMPTZ,
     cancelled_at            TIMESTAMPTZ
 );
+
+-- Partial unique index: prevents double-booking the same seat at DB level.
+-- WHERE status != 'cancelled' allows re-booking a seat after cancellation.
+CREATE UNIQUE INDEX uq_bookings_seat_per_date
+    ON bookings(schedule_id, seat_id, travel_date)
+    WHERE status != 'cancelled';
+
+-- Composite index for availability checks (schedule + date + status filter)
+CREATE INDEX idx_bookings_schedule_date ON bookings(schedule_id, travel_date, status);
+-- Index for user booking history lookups
+CREATE INDEX idx_bookings_user_id ON bookings(user_id);
 
 -- ============================================================
 --  6. PAYMENTS
@@ -221,6 +232,9 @@ CREATE TABLE payments (
     paid_at      TIMESTAMPTZ   DEFAULT NOW(),
     refunded_at  TIMESTAMPTZ
 );
+
+-- Index for payment lookup by booking_id (query_payment_info)
+CREATE INDEX idx_payments_booking_id ON payments(booking_id);
 
 -- ============================================================
 --  7. FEEDBACK
