@@ -182,13 +182,17 @@ docs = search_with_rerank(embedding, params["query"], top_k=VECTOR_TOP_K)
 - Relational 的 `execute_booking` / `execute_cancellation` 交易處理（commit/rollback/退款視窗計算）邏輯完整正確。
 - `query_national_rail_availability`、`query_metro_schedules`、fare 計算、auth（bcrypt、secret question）皆正常。
 - `llm_provider.py` 雙 provider 切換、Ollama native tool-calling 完整。
-- Graph 6 個函式的**演算法與回傳格式**（APOC dijkstra、`hops=0` 特判、空結果回 `{}`/`[]` 不 raise）都正確，只差 schema 命名要換。
+- Graph 6 個函式的**演算法與回傳格式**（APOC dijkstra、`hops=0` 特判、空結果回 `{}`/`[]` 不 raise）都正確。`query_delay_ripple` 的 `shortestPath` in `min()` 語法問題已修正。
 - `agent.py` 的 fallback routing、`_flatten_to_text` 通用攤平都健全。
 
 ---
 
 ### 建議修復順序
 1. ✅ A1、A2（不修就跑不起來 / 登不進去）→ 蔡已處理。
-2. 🔴 C1（Graph 重寫）→ Chien 依正式開發流程動工。
+2. ✅ C1（Graph 重寫）→ 黃已完成。
 3. ✅ A3、A4 → 已修。🟠 J1 → 蔣待處理。
 4. ✅ A5、🟡 S2 → 蔡已補 schema 細節與部分註解。
+
+### 後續追加修正
+- ✅ `query_delay_ripple`：`shortestPath()` 不能放在 `min()` 內部（Neo4j 語法限制）→ 改用 `min(length(path))` 搭配命名 path 變數。
+- ✅ `graph/queries.py`：移除未使用的 `from typing import Optional`。
