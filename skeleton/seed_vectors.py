@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import time
+import psycopg2
 from functools import lru_cache
 
 sys.path.insert(0, ".")
@@ -140,6 +141,13 @@ def seed():
                 )
                 print(f"    ✓ Stored chunk {j+1}/{len(chunks)} as document id={doc_id}")
 
+            except psycopg2.Error as db_e:
+                if "dimension" in str(db_e).lower():
+                    print(f"\n    ⚠️  Database dimension mismatch! Schema likely expects vector(768) but received {len(embedding)} dimensions.")
+                    print("    If you switched to Gemini, you must update `databases/relational/schema.sql` to `vector(3072)` and reset the database.")
+                    sys.exit(1)
+                print(f"    ✗ Database error on chunk {j+1}: {db_e}")
+                raise
             except Exception as e:
                 print(f"    ✗ Failed on chunk {j+1}: {e}")
                 raise
