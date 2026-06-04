@@ -89,6 +89,85 @@ def seed():
                 )
             print(f"  Merged {len(rail_stations)} NationalRailStation nodes")
 
+            # ── METRO_LINK relationships ──────────────────────────────────────
+            # fare_usd is stored on each edge so Dijkstra can use it as a weight
+            metro_edges = []
+            for s in metro_stations:
+                t = s["travel_time_min"] if "travel_time_min" in s else None
+                for adj in s.get("adjacent_stations", []):
+                    t = adj["travel_time_min"]
+                    metro_edges.append({
+                        "from_id": s["station_id"],
+                        "to_id":   adj["station_id"],
+                        "line":    adj["line"],
+                        "travel_time_min": t,
+                        "fare_usd": round(1.0 + 0.5 * t, 2),
+                    })
+
+            session.run(
+                """
+                UNWIND $edges AS e
+                MATCH (a:MetroStation {station_id: e.from_id})
+                MATCH (b:MetroStation {station_id: e.to_id})
+                MERGE (a)-[r:METRO_LINK {line: e.line}]->(b)
+                SET r.travel_time_min = e.travel_time_min,
+                    r.fare_usd        = e.fare_usd
+                """,
+                edges=metro_edges,
+            )
+            print(f"  Merged {len(metro_edges)} METRO_LINK edges")
+
+            # ── RAIL_LINK relationships ───────────────────────────────────────
+            # Two fare tiers (standard / first class) stored as separate properties
+            rail_edges = []
+            for s in rail_stations:
+                for adj in s.get("adjacent_stations", []):
+                    t = adj["travel_time_min"]
+                    rail_edges.append({
+                        "from_id": s["station_id"],
+                        "to_id":   adj["station_id"],
+                        "line":    adj["line"],
+                        "travel_time_min":    t,
+                        "fare_standard_usd":  round(2.0 + 1.2 * t, 2),
+                        "fare_first_usd":     round(2.0 + 2.0 * t, 2),
+                    })
+
+            session.run(
+                """
+                UNWIND $edges AS e
+                MATCH (a:NationalRailStation {station_id: e.from_id})
+                MATCH (b:NationalRailStation {station_id: e.to_id})
+                MERGE (a)-[r:RAIL_LINK {line: e.line}]->(b)
+                SET r.travel_time_min   = e.travel_time_min,
+                    r.fare_standard_usd = e.fare_standard_usd,
+                    r.fare_first_usd    = e.fare_first_usd
+                """,
+                edges=rail_edges,
+            )
+            print(f"  Merged {len(rail_edges)} RAIL_LINK edges")
+
+            # ── INTERCHANGE_TO relationships ──────────────────────────────────
+            # Two directed edges per interchange pair so both Dijkstra directions work.
+            # transfer_time_min is fixed at 5 min (not travel_time_min — INTERCHANGE_TO
+            # has no travel_time_min, so interchange_path sums it separately).
+            interchange_count = 0
+            for s in metro_stations:
+                if s.get("is_interchange_national_rail") and s.get("interchange_national_rail_station_id"):
+                    session.run(
+                        """
+                        MATCH (m:MetroStation       {station_id: $metro_id})
+                        MATCH (nr:NationalRailStation {station_id: $nr_id})
+                        MERGE (m)-[r1:INTERCHANGE_TO]->(nr)
+                        SET r1.transfer_time_min = 5
+                        MERGE (nr)-[r2:INTERCHANGE_TO]->(m)
+                        SET r2.transfer_time_min = 5
+                        """,
+                        metro_id=s["station_id"],
+                        nr_id=s["interchange_national_rail_station_id"],
+                    )
+                    interchange_count += 2
+            print(f"  Merged {interchange_count} INTERCHANGE_TO edges")
+
             # ── Validation ────────────────────────────────────────────────────
             metro_count = session.run(
                 "MATCH (n:MetroStation) RETURN count(n) AS c"
@@ -96,9 +175,21 @@ def seed():
             rail_count = session.run(
                 "MATCH (n:NationalRailStation) RETURN count(n) AS c"
             ).single()["c"]
-            print(f"  Validation: {metro_count} MetroStation, {rail_count} NationalRailStation")
+            ml_count = session.run(
+                "MATCH ()-[r:METRO_LINK]->() RETURN count(r) AS c"
+            ).single()["c"]
+            rl_count = session.run(
+                "MATCH ()-[r:RAIL_LINK]->() RETURN count(r) AS c"
+            ).single()["c"]
+            ic_count = session.run(
+                "MATCH ()-[r:INTERCHANGE_TO]->() RETURN count(r) AS c"
+            ).single()["c"]
+            print(
+                f"  Validation: {metro_count} MetroStation, {rail_count} NationalRailStation | "
+                f"{ml_count} METRO_LINK, {rl_count} RAIL_LINK, {ic_count} INTERCHANGE_TO"
+            )
 
-    print("\nNeo4j nodes seeded successfully.")
+    print("\nNeo4j graph seeded successfully.")
     print("   Open http://localhost:7475 to explore the graph.")
 
 
