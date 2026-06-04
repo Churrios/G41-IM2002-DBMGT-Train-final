@@ -230,52 +230,62 @@ registered_users
 
 ## Agreed Graph Schema
 
-> **Status: CONFIRMED 2026-05-28 — voted by 蔣組員 + Antigravity AI.**
-> Q1 single Station label ✓ | Q2 CONNECTS_TO + network property ✓ | Q3 INTERCHANGE_WITH as edge ✓
+> **Status: CONFIRMED 2026-06-04 — Q1=A adopted (split-label model, aligned with grading standard).**
+> Q1 split labels MetroStation / NationalRailStation ✓ | Q2 METRO_LINK / RAIL_LINK ✓ | Q3 INTERCHANGE_TO (bidirectional) ✓ | Q5 fare stored on edges ✓
 
 ```
 Node labels:
-  Station
+  MetroStation
     Properties:
-      station_id   String  (e.g. "MS01", "NR01")
-      name         String
-      network      String  ("metro" | "national_rail")
-      lines        List<String>  (e.g. ["red", "blue"])
+      station_id                    String   (e.g. "MS01")        -- node identity / unique constraint
+      name                          String   (e.g. "Central Square")
+      lines                         List<String>  (e.g. ["M1", "M2"])
+      is_interchange_national_rail  Boolean  (true if it transfers to a rail station)
 
-  (No split into MetroStation / NationalRailStation — a single label keeps
-   Cypher queries uniform and network is queryable via WHERE s.network = '...')
+  NationalRailStation
+    Properties:
+      station_id                    String   (e.g. "NR01")        -- node identity / unique constraint
+      name                          String   (e.g. "Central Station")
+      lines                         List<String>  (e.g. ["NR1", "NR2"])
+      is_interchange_metro          Boolean
+      interchange_metro_station_id  String   (the MetroStation it transfers to, or null)
+
+  (Split into MetroStation / NationalRailStation rather than one Station label,
+   to match the grading standard which checks for both labels explicitly.)
 
 Relationship types:
-  CONNECTS_TO
-    Direction: (a:Station)-[:CONNECTS_TO]->(b:Station)
+  METRO_LINK   (MetroStation)-[:METRO_LINK]->(MetroStation)
     Properties:
-      line              String   (which line this link belongs to)
+      line              String
       travel_time_min   Integer
-      network           String   ("metro" | "national_rail")
+      fare_usd          Float    -- round(1.0 + 0.5 * travel_time_min, 2); metro is single-tier (no fare_class)
 
-  INTERCHANGE_WITH
-    Direction: (metro:Station)-[:INTERCHANGE_WITH]->(nr:Station)  (undirected in practice)
+  RAIL_LINK    (NationalRailStation)-[:RAIL_LINK]->(NationalRailStation)
     Properties:
-      (none required — existence of edge implies physical interchange)
+      line                String
+      travel_time_min     Integer
+      fare_standard_usd   Float  -- round(2.0 + 1.2 * travel_time_min, 2)
+      fare_first_usd      Float  -- round(2.0 + 2.0 * travel_time_min, 2)
+
+  INTERCHANGE_TO  (MetroStation)-[:INTERCHANGE_TO]-(NationalRailStation)
+    Properties:
+      transfer_time_min   Integer  -- fixed 5 (spec does not mandate; professor confirmed a sensible custom value is OK)
+    Note: seeded as TWO directed edges (metro->rail and rail->metro) so Dijkstra
+          can traverse either direction; queries match it undirected: -[:INTERCHANGE_TO]-.
 ```
 
 ### Design rationale
 
 | Decision | Choice | Reason |
 |---|---|---|
-| Single `Station` label | ✓ | Shortest-path queries work across both networks without UNION |
-| `network` property on node | ✓ | Filter by network in WHERE clause, not label match |
-| `CONNECTS_TO` directional | ✓ | Models timetable direction; bidirectional travel = two edges |
-| `INTERCHANGE_WITH` separate type | ✓ | Allows `query_interchange_path` to specifically follow transfer edges |
+| Split `MetroStation` / `NationalRailStation` | ✓ | Matches grading standard (Task 4 / Live A check both labels by name) |
+| `METRO_LINK` / `RAIL_LINK` separate types | ✓ | Lets each network carry its own fare model on the edge; route queries can restrict to `'METRO_LINK\|RAIL_LINK'` and stay same-network |
+| Fare stored on edges at seed time (Q5=A) | ✓ | `apoc.algo.dijkstra` can use a fare property directly as weight, so fare_class genuinely changes the chosen path (Live C2), not just the final total |
+| `INTERCHANGE_TO` bidirectional, `transfer_time_min=5` | ✓ | Only `query_interchange_path` follows it (cross-network); excluded from shortest/cheapest so same-network routing returns found=False when unreachable |
+| `station_id` as node identity | ✓ | Unique constraint per label; stable external key from the source JSON |
 
-### Open questions for team vote (Q1–Q3)
-
-- **Q1**: Keep single `Station` label, or split to `MetroStation` / `NationalRailStation`?
-  → Antigravity AI votes: **single label** (simpler Cypher)
-- **Q2**: Use `CONNECTS_TO` for both metro and NR, or separate `MetroLink` / `RailLink`?
-  → Antigravity AI votes: **single `CONNECTS_TO`** with `network` property
-- **Q3**: Should `INTERCHANGE_WITH` be stored, or derived from station properties?
-  → Antigravity AI votes: **store as explicit edge** (faster path queries)
+Topology: 30 nodes (20 MetroStation + 10 NationalRailStation),
+66 edges (42 METRO_LINK + 18 RAIL_LINK + 6 INTERCHANGE_TO).
 
 ## Function Signatures We Are Implementing
 
@@ -326,7 +336,7 @@ def query_station_connections(station_id: str) -> list[dict]: ...
 - [x] **2026-05-28** Password storage: `registered_users.password` stores **bcrypt hash only**. Never seed plaintext. Use `bcrypt.hashpw()` in `seed_postgres.py`.
 - [x] **2026-05-28** `travel_time_from_origin` stored as **JSONB map** `{"station_id": minutes}` — not a separate table. Rationale: read-only lookup, no joins needed, JSON key is station_id.
 - [x] **2026-05-28** `stops_in_order` and `lines` stored as **`VARCHAR(10)[]`** — queried with `@>` (contains) and `array_position()`. Avoids a junction table for ordered stop lists.
-- [x] **2026-05-28** Graph schema confirmed: single `Station` label, `CONNECTS_TO {line, travel_time_min, network}`, `INTERCHANGE_WITH` as explicit bidirectional edges. Stats: 30 nodes (15 metro + 15 NR), 66 edges (36 metro + 26 NR CONNECTS_TO + 4 INTERCHANGE_WITH).
+- [x] **2026-06-04** Graph schema migrated to split-label model (Q1=A): `MetroStation` / `NationalRailStation`, `METRO_LINK {line, travel_time_min, fare_usd}` / `RAIL_LINK {line, travel_time_min, fare_standard_usd, fare_first_usd}`, `INTERCHANGE_TO {transfer_time_min:5}` (bidirectional). Stats: 30 nodes (20 metro + 10 NR), 66 edges (42 METRO_LINK + 18 RAIL_LINK + 6 INTERCHANGE_TO). Supersedes the 2026-05-28 single-Station design.
 
 ## Prompts That Worked
 
