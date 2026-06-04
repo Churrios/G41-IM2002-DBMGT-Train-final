@@ -25,9 +25,6 @@ from skeleton.config import (
 )
 
 
-_embed_cache: dict[str, tuple[float, ...]] = {}
-
-
 class LLMProvider:
     """
     Unified interface for chat and embeddings.
@@ -143,14 +140,10 @@ class LLMProvider:
         return self._ollama_chat(messages, system_prompt)
 
     def embed(self, text: str) -> List[float]:
-        if text in _embed_cache:
-            return list(_embed_cache[text])
+        # Uses the provider set at startup — must match the model used to seed the vectors
         if self._embed_provider == "ollama":
-            result = self._ollama_embed(text)
-        else:
-            result = self._gemini_embed(text)
-        _embed_cache[text] = tuple(result)
-        return result
+            return self._ollama_embed(text)
+        return self._gemini_embed(text)
 
     # ── Gemini internals ───────────────────────────────────────────────────
 
