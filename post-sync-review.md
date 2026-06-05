@@ -102,7 +102,11 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 | ✅ | `queries.py`：`query_user_profile` 補 `year_of_birth` |
 | ✅ | `seed_postgres.py`：`seed_seat_layouts` fare_class 讀 coach 層 |
 | ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
-| 🟡 | `schema.sql`：討論是否改 junction table 取代 `stops_in_order VARCHAR[]`（待三人決定） |
+| 🔴 | `schema.sql` + `queries.py`：改 junction table（`metro_schedule_stops` / `national_rail_schedule_stops`），移除 `stops_in_order VARCHAR[]` — 詳見 Step B |
+| 🔴 | **Design Document Section 1**：ER Diagram（dbdiagram.io 畫圖，含基數標注） |
+| 🔴 | **Design Document Section 2**：Normalisation Justification（3NF、bcrypt、trade-off） |
+| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ✅ | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改，已確認兩版皆已是最新） |
 | 🟡 | Policy JSON 擴充：確認評分標準是否要求新增條目，若要則補充四個 policy 檔並重跑 `seed_vectors.py` |
 | 🟡 | `databases/graph/seed.cypher`：確認內容是否已同步新 schema（`MetroStation`/`METRO_LINK`/`INTERCHANGE_TO`），評分 TA 可能直接看此檔 |
@@ -127,6 +131,10 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 | ✅ | `query_alternative_routes` — C3 已修（`WITH` + `RETURN DISTINCT` 去重，PR #30） |
 | ✅ | `graph/queries.py`：Driver 模式已定案 **維持 per-call**（Q10 決議） |
 | ✅ | `seed_neo4j.py`：`CREATE CONSTRAINT FOR (s:MetroStation) REQUIRE s.station_id IS UNIQUE` 已確認存在 |
+| 🔴 | **`skeleton/seed_postgres.py`**：`seed_metro_schedules` / `seed_national_rail_schedules` 改為同步 insert 到 junction table — 詳見 Step B |
+| 🔴 | **Design Document Section 3**：Graph Database Design Rationale（nodes/relationships/properties 設計理由、Dijkstra vs SQL 論證） |
+| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ⭐ BONUS | `graph/queries.py`：新增 `BUS_LINK` 關係類型（公車接駁站點） |
 | ⭐ BONUS | `seed_neo4j.py`：節點加 `zone` 屬性（分區票價計算） |
 | ⭐ BONUS | GDS 演算法：PageRank 找最重要樞紐站、Louvain 社群偵測找路線集群（需在 docker-compose.yml 啟用 GDS plugin） |
@@ -209,8 +217,12 @@ LIMIT $max_routes
 | ✅ | `agent.py`：`search_policy` 接入 `rag.search_with_rerank`，reranker 正式進入 pipeline |
 | ✅ | `rag.py` / `reranker.py`：邏輯完整 |
 | — | `llm_provider.py`：老師標示不需修改，embed cache 略過 |
-| 🟡 | `databases/relational/queries.py`：`query_policy_vector_search` 加入 metadata filtering，可依 `category` 欄位先過濾再做 vector 比對，避免跨類別雜訊（SideNote2 建議）|
-| 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高 → 需實跑幾筆 query 確認 `query_policy_vector_search` 真的有回傳文件；必要時調低（如 0.3）|
+| 🟡 | `databases/relational/queries.py`：`query_policy_vector_search` 加入 metadata filtering |
+| 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高，必要時調低至 0.3 |
+| 🔴 | **`skeleton/agent.py` line 328**：`stops_in_order` → 改成 junction table 回傳格式 — 詳見 Step B |
+| 🔴 | **Design Document Section 4**：Vector / RAG Design（cosine similarity、RAG pipeline、embedding dimension） |
+| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ⭐ BONUS | Policy JSON 新增條目：失物招領政策、團體訂票折扣（10人以上）、無障礙服務、計劃性停駛通知、逃票罰款（補充後重跑 `seed_vectors.py`） |
 
 ### 👥 三人共同
