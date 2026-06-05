@@ -49,40 +49,14 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 
 ## 零、立即下一步（三人共同討論）
 
-### 🔴 Step A — 環境跑通（今天優先）
+### ✅ Step A — 環境跑通（蔡晟郁已完成，2026-06-05）
 
-找一個人完整執行以下流程，確認沒有 traceback：
-
-```bash
-# 1. 建立虛擬環境並安裝套件
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 2. 複製環境變數（若還沒做）
-cp .env.example .env
-
-# 3. 啟動 Docker
-docker compose up -d
-docker compose ps   # 確認 healthy
-
-# 4. Seed 三個資料庫
-python3 skeleton/seed_postgres.py
-ollama serve &      # 另開終端機先確認 ollama 跑起來
-ollama pull llama3.2:1b
-ollama pull nomic-embed-text
-python3 skeleton/seed_vectors.py
-python3 skeleton/seed_neo4j.py
-
-# 5. 啟動 UI 驗證
-python3 skeleton/ui.py
-```
-
-跑通後在下方記錄結果：
 - [x] seed_postgres 無 traceback（修正 stops_travelled null → 0）
 - [x] seed_vectors 無 traceback（101 chunks 存入）
 - [x] seed_neo4j 無 traceback（20 MetroStation, 10 NationalRailStation, 42 METRO_LINK, 18 RAIL_LINK, 6 INTERCHANGE_TO）
-- [ ] ui.py 可正常開啟並登入
+- [x] ui.py 可正常開啟並登入
+
+> ⚠️ Ollama 需使用**官方安裝腳本**（`curl -fsSL https://ollama.com/install.sh | sh`），Homebrew 版缺少 `llama-server` binary 會導致 embed 呼叫失敗。
 
 ---
 
@@ -117,7 +91,7 @@ python3 skeleton/ui.py
 | ✅ | `seed_postgres.py`：`seed_seat_layouts` fare_class 讀 coach 層 |
 | ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
 | 🟡 | `schema.sql`：討論是否改 junction table 取代 `stops_in_order VARCHAR[]`（待三人決定） |
-| 🟡 | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改） |
+| ✅ | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改，已確認兩版皆已是最新） |
 
 ### 🟢 黃謙儒（Graph DB）
 
@@ -329,14 +303,14 @@ LIMIT $max_routes
 | # | 步驟 | 狀態 |
 |---|------|------|
 | 1 | Clone repo | ✅ |
-| 2 | `python3 -m venv .venv` | ❌ |
-| 3 | `source .venv/bin/activate` | ❌ |
-| 4 | `pip install -r requirements.txt` | ❌ |
-| 5 | 複製 `.env.example` → `.env`；port 衝突時**只改 `.env`，不動 `config.py`** | ❌ |
-| 6 | `docker compose up -d` | ❌ |
-| 7 | `docker compose ps`（確認 healthy） | ❌ |
-| 8 | `python3 skeleton/seed_postgres.py` | ❌ |
-| 9 | `ollama serve`（先確認 server 跑起來）→ `ollama pull llama3.2:1b` + `nomic-embed-text` | ❌ |
-| 10 | `python3 skeleton/seed_vectors.py` | ❌ |
-| 11 | `python3 skeleton/seed_neo4j.py`（需等黃完成 schema 改動） | ❌ |
-| 12 | `python3 skeleton/ui.py` | ❌ |
+| 2 | `python3 -m venv .venv` | ✅ |
+| 3 | `source .venv/bin/activate` | ✅ |
+| 4 | `pip install -r requirements.txt` | ✅ |
+| 5 | 複製 `.env.example` → `.env`；port 衝突時**只改 `.env`，不動 `config.py`** | ✅ |
+| 6 | `docker compose up -d` | ✅ |
+| 7 | `docker compose ps`（確認 healthy） | ✅ |
+| 8 | `python3 skeleton/seed_postgres.py` | ✅ |
+| 9 | `ollama serve`（先確認 server 跑起來）→ `ollama pull llama3.2:1b` + `nomic-embed-text` | ✅ 需用官方安裝（非 Homebrew） |
+| 10 | `python3 skeleton/seed_vectors.py` | ✅ 101 chunks |
+| 11 | `python3 skeleton/seed_neo4j.py` | ✅ 20站、66條邊 |
+| 12 | `python3 skeleton/ui.py` | ✅ |
