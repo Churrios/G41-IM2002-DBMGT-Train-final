@@ -49,40 +49,14 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 
 ## 零、立即下一步（三人共同討論）
 
-### 🔴 Step A — 環境跑通（今天優先）
+### ✅ Step A — 環境跑通（蔡晟郁已完成，2026-06-05）
 
-找一個人完整執行以下流程，確認沒有 traceback：
-
-```bash
-# 1. 建立虛擬環境並安裝套件
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 2. 複製環境變數（若還沒做）
-cp .env.example .env
-
-# 3. 啟動 Docker
-docker compose up -d
-docker compose ps   # 確認 healthy
-
-# 4. Seed 三個資料庫
-python3 skeleton/seed_postgres.py
-ollama serve &      # 另開終端機先確認 ollama 跑起來
-ollama pull llama3.2:1b
-ollama pull nomic-embed-text
-python3 skeleton/seed_vectors.py
-python3 skeleton/seed_neo4j.py
-
-# 5. 啟動 UI 驗證
-python3 skeleton/ui.py
-```
-
-跑通後在下方記錄結果：
 - [x] seed_postgres 無 traceback（修正 stops_travelled null → 0）
 - [x] seed_vectors 無 traceback（101 chunks 存入）
 - [x] seed_neo4j 無 traceback（20 MetroStation, 10 NationalRailStation, 42 METRO_LINK, 18 RAIL_LINK, 6 INTERCHANGE_TO）
-- [ ] ui.py 可正常開啟並登入
+- [x] ui.py 可正常開啟並登入
+
+> ⚠️ Ollama 需使用**官方安裝腳本**（`curl -fsSL https://ollama.com/install.sh | sh`），Homebrew 版缺少 `llama-server` binary 會導致 embed 呼叫失敗。
 
 ---
 
@@ -117,7 +91,14 @@ python3 skeleton/ui.py
 | ✅ | `seed_postgres.py`：`seed_seat_layouts` fare_class 讀 coach 層 |
 | ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
 | 🟡 | `schema.sql`：討論是否改 junction table 取代 `stops_in_order VARCHAR[]`（待三人決定） |
-| 🟡 | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改） |
+| ✅ | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改，已確認兩版皆已是最新） |
+| 🟡 | Policy JSON 擴充：確認評分標準是否要求新增條目，若要則補充四個 policy 檔並重跑 `seed_vectors.py` |
+| 🟡 | `databases/graph/seed.cypher`：確認內容是否已同步新 schema（`MetroStation`/`METRO_LINK`/`INTERCHANGE_TO`），評分 TA 可能直接看此檔 |
+| ⭐ BONUS | `schema.sql`：新增 `delay_records` 表（記錄運營方回報的誤點） |
+| ⭐ BONUS | `schema.sql`：新增 `season_tickets` 表（捷運週/月/年票） |
+| ⭐ BONUS | `schema.sql`：新增 `platform_assignments` 表（各服務月台號） |
+| ⭐ BONUS | `schema.sql`：`registered_users` 加 `loyalty_points` 欄位 |
+| ⭐ BONUS | `schema.sql`：新增 `disruptions` 表（計劃性停駛工程） |
 
 ### 🟢 黃謙儒（Graph DB）
 
@@ -130,8 +111,13 @@ python3 skeleton/ui.py
 | ✅ | `query_cheapest_route`：fare_usd / fare_standard_usd / fare_first_usd 寫入邊屬性，Dijkstra 直接使用 |
 | ✅ | `query_station_connections`：移除 `r.network`，改用關係型別判斷 |
 | ✅ | `query_delay_ripple` — C5 已由 PR #27 修正（`MATCH path =` + `min(length(path))`；文件舊標 🔴 是過時的，**請勿改回 `min(length(shortestPath(...)))`**） |
-| ✅ | `query_interchange_path` — C4 已修（`shortestPath(*1..10)` 取代 `*1..20` 全列舉） |
-| ✅ | `query_alternative_routes` — C3 已修（`WITH` + `RETURN DISTINCT` 去重） |
+| ✅ | `query_interchange_path` — C4 已修（`shortestPath(*1..10)` 取代 `*1..20` 全列舉，PR #30） |
+| ✅ | `query_alternative_routes` — C3 已修（`WITH` + `RETURN DISTINCT` 去重，PR #30） |
+| ✅ | `graph/queries.py`：Driver 模式已定案 **維持 per-call**（Q10 決議） |
+| ✅ | `seed_neo4j.py`：`CREATE CONSTRAINT FOR (s:MetroStation) REQUIRE s.station_id IS UNIQUE` 已確認存在 |
+| ⭐ BONUS | `graph/queries.py`：新增 `BUS_LINK` 關係類型（公車接駁站點） |
+| ⭐ BONUS | `seed_neo4j.py`：節點加 `zone` 屬性（分區票價計算） |
+| ⭐ BONUS | GDS 演算法：PageRank 找最重要樞紐站、Louvain 社群偵測找路線集群（需在 docker-compose.yml 啟用 GDS plugin） |
 
 #### 🔴 `query_delay_ripple` 問題詳述
 
@@ -211,6 +197,9 @@ LIMIT $max_routes
 | ✅ | `agent.py`：`search_policy` 接入 `rag.search_with_rerank`，reranker 正式進入 pipeline |
 | ✅ | `rag.py` / `reranker.py`：邏輯完整 |
 | — | `llm_provider.py`：老師標示不需修改，embed cache 略過 |
+| 🟡 | `databases/relational/queries.py`：`query_policy_vector_search` 加入 metadata filtering，可依 `category` 欄位先過濾再做 vector 比對，避免跨類別雜訊（SideNote2 建議）|
+| 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高 → 需實跑幾筆 query 確認 `query_policy_vector_search` 真的有回傳文件；必要時調低（如 0.3）|
+| ⭐ BONUS | Policy JSON 新增條目：失物招領政策、團體訂票折扣（10人以上）、無障礙服務、計劃性停駛通知、逃票罰款（補充後重跑 `seed_vectors.py`） |
 
 ### 👥 三人共同
 
@@ -220,6 +209,17 @@ LIMIT $max_routes
 | 🔴 | **Design Document**：各自負責章節後合併（蔡 Sec1+2，黃 Sec3，蔣 Sec4，三人共 Sec5+6） |
 | 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
 | 🔴 | **Peer Review**：每人各自填 `PEER_REVIEW_TEMPLATE.md`（保密） |
+| ✅ | 確認評分 repo（`IM2002-grading-students/`）已在本地，已完整閱讀三份評分細則 |
+| 🔴 | **C4 `query_interchange_path` 超時 — Live Section C 8 分全丟，黃需修正** |
+| 🟡 | **Task 1 Normalisation**：`stops_in_order VARCHAR[]` 未改 junction table，評分明確要求此項，三人需決定是否修改 |
+| 🟡 | **STUDENT_GUIDE_CODE / LIVE 的狀態欄位已過時**（部分 ❌ 實際已修正），需更新 |
+| ⭐ BONUS | **Task 6 Bonus（+15 × 3 = +45）**：要拿 bonus 必須建立 `TASK6.md`（列所有改動）＋每個改動檔案頭加 `# TASK 6 EXTENSION:` comment ＋ Design Document 加 Section 7，缺 `TASK6.md` 則 bonus 不計分 |
+| ⭐ BONUS | `agent.py`：新增額外 tool（如 `get_platform`、`query_disruptions`）並接入 pipeline |
+| ⭐ BONUS | `ui.py`：客製化介面（調整 EXAMPLES 列表、版面、顏色主題） |
+| ⭐ BONUS | **Unit Test（pytest）**：為三個 DB 層各撰寫測試（蔡：`tests/test_relational.py`、黃：`tests/test_graph.py`、蔣：`tests/test_rag.py`）——程式碼完成後再做 |
+| 🟡 | **模組層級 docstring**：程式碼收尾後確認 `databases/relational/queries.py`、`databases/graph/queries.py`、`skeleton/seed_postgres.py`、`skeleton/seed_neo4j.py` 等檔案頭部是否有模組說明 docstring |
+| 🟡 | **`config.py` 預設埠**：`PG_PORT=5432`、`NEO4J_URI=bolt://localhost:7687` 與 Docker 映射（5433/7688）不符 → 靠 `.env` 補救，但建議改預設值或加 README 警語，避免新成員忘設 `.env` 時連線失敗 |
+| 🟡 | **`README.md` 最末行有 `hahahahah`**：繳交前必須刪除 |
 
 ---
 
@@ -234,19 +234,46 @@ LIMIT $max_routes
 
 ---
 
-## 三、評分風險
+## 三、評分風險（依評分細則更新，2026-06-05）
 
-| 項目 | 評分標準要求 | 我們的狀態 | 風險 |
-|------|------------|-----------|------|
-| Task 4 Graph Design /8 | `MetroStation` / `METRO_LINK` / `INTERCHANGE_TO` | ✅ 已完成 | ✅ |
-| Task 1 Normalisation | junction table for stops | `VARCHAR[]` array（設計取捨） | 🟡 可能扣分 |
-| Task 1 FK cascade | `ON DELETE` 明確指定 | ✅ 已補全 | ✅ |
-| Task 1 PK comment | 說明選型理由 | ✅ 已補 | ✅ |
-| Task 1 Delete strategy | comment 說明 soft delete | ✅ 已補 | ✅ |
-| Live A Neo4j | `METRO_LINK` / `RAIL_LINK` | ✅ 已完成 | ✅ |
-| Live C4 interchange path | 走 `INTERCHANGE_TO` | ✅ 已完成 | ✅ |
-| Code Quality /2 | 3–5 個函式有 inline comment | ✅ 已補 WHY comments | ✅ |
-| Task 5 C2 cheapest route | `fare_class` 影響 Dijkstra 路徑 | ✅ 邊屬性已寫入，Dijkstra 直接使用 | ✅ |
+### 靜態程式碼（/100）
+
+| 項目 | 滿分 | 狀態 | 風險 |
+|------|------|------|------|
+| Task 1 Table completeness | — | ✅ | ✅ |
+| Task 1 PK/FK correctness | — | ✅ | ✅ |
+| Task 1 Data types | — | ✅ | ✅ |
+| Task 1 Password (bcrypt) | — | ✅ | ✅ |
+| Task 1 FK cascade ON DELETE | — | ✅ 已補 | ✅ |
+| Task 1 PK design comment | — | ✅ 已補 | ✅ |
+| Task 1 Delete strategy comment | — | ✅ 已補 | ✅ |
+| **Task 1 Normalisation（junction table）** | — | ❌ VARCHAR[] | 🔴 扣分 |
+| Task 2 Query functions /30 | 30 | ✅ 15/15 | ✅ |
+| Task 3 Seeding /10 | 10 | ✅ | ✅ |
+| Task 4 Graph Design /8 | 8 | ✅ 黃已完成 | ✅ |
+| Task 5 C1/C2/C3/C5/C6 | 9 | ✅ | ✅ |
+| **Task 5 C4 interchange path** | **1** | ⚠️ timeout | 🔴 失分 |
+| Code Quality /2 | 2 | ✅ WHY comments | ✅ |
+
+### Live Testing（/100）
+
+| 項目 | 滿分 | 狀態 | 風險 |
+|------|------|------|------|
+| Section A Seeding /15 | 15 | ✅ | ✅ |
+| Section B B1–B10 /50 | 50 | ✅ 全過 | ✅ |
+| Section C C1/C2/C5/C6 | 20 | ✅ | ✅ |
+| Section C C3 duplicate routes | 7 | ⚠️ 功能正確但重複 | 🟡 部分失分 |
+| **Section C C4 interchange path** | **8** | 🔴 timeout | 🔴 8 分全丟 |
+
+### Task 6 Bonus 條件（+15 × 3 = +45）
+
+要拿任一 bonus 分，**全部四項**必須齊備：
+1. 改動 database code（schema / queries / seed）
+2. 每個新函式 / 新表格有詳細 inline comment
+3. Design Document 加 **Section 7**
+4. repo root 建立 **`TASK6.md`**，且每個改動檔案頭有 `# TASK 6 EXTENSION:` comment
+
+> 缺少 `TASK6.md` 或 per-file comment → bonus 不計分
 
 ---
 
@@ -329,14 +356,14 @@ LIMIT $max_routes
 | # | 步驟 | 狀態 |
 |---|------|------|
 | 1 | Clone repo | ✅ |
-| 2 | `python3 -m venv .venv` | ❌ |
-| 3 | `source .venv/bin/activate` | ❌ |
-| 4 | `pip install -r requirements.txt` | ❌ |
-| 5 | 複製 `.env.example` → `.env`；port 衝突時**只改 `.env`，不動 `config.py`** | ❌ |
-| 6 | `docker compose up -d` | ❌ |
-| 7 | `docker compose ps`（確認 healthy） | ❌ |
-| 8 | `python3 skeleton/seed_postgres.py` | ❌ |
-| 9 | `ollama serve`（先確認 server 跑起來）→ `ollama pull llama3.2:1b` + `nomic-embed-text` | ❌ |
-| 10 | `python3 skeleton/seed_vectors.py` | ❌ |
-| 11 | `python3 skeleton/seed_neo4j.py`（需等黃完成 schema 改動） | ❌ |
-| 12 | `python3 skeleton/ui.py` | ❌ |
+| 2 | `python3 -m venv .venv` | ✅ |
+| 3 | `source .venv/bin/activate` | ✅ |
+| 4 | `pip install -r requirements.txt` | ✅ |
+| 5 | 複製 `.env.example` → `.env`；port 衝突時**只改 `.env`，不動 `config.py`** | ✅ |
+| 6 | `docker compose up -d` | ✅ |
+| 7 | `docker compose ps`（確認 healthy） | ✅ |
+| 8 | `python3 skeleton/seed_postgres.py` | ✅ |
+| 9 | `ollama serve`（先確認 server 跑起來）→ `ollama pull llama3.2:1b` + `nomic-embed-text` | ✅ 需用官方安裝（非 Homebrew） |
+| 10 | `python3 skeleton/seed_vectors.py` | ✅ 101 chunks |
+| 11 | `python3 skeleton/seed_neo4j.py` | ✅ 20站、66條邊 |
+| 12 | `python3 skeleton/ui.py` | ✅ |
