@@ -221,10 +221,10 @@ def query_alternative_routes(
                               -[:METRO_LINK|RAIL_LINK*1..10]-
                               (d {station_id: $dest_id})
                     WHERE NONE(n IN nodes(p) WHERE n.station_id = $avoid_station_id)
-                    RETURN
-                        [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
-                        reduce(t = 0, r IN relationships(p) | t + r.travel_time_min)
-                            AS total_time_min
+                    WITH [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
+                         reduce(t = 0, r IN relationships(p) | t + r.travel_time_min)
+                             AS total_time_min
+                    RETURN DISTINCT route, total_time_min
                     ORDER BY total_time_min
                     LIMIT $max_routes
                     """,
@@ -267,14 +267,16 @@ def query_interchange_path(origin_id: str, destination_id: str) -> dict:
     try:
         with _driver() as driver:
             with driver.session() as session:
+                # shortestPath replaces *1..20 exhaustive enumeration: 30-node graph
+                # with *1..20 causes combinatorial blow-up and timeouts.
                 result = session.run(
                     """
-                    MATCH p = (o {station_id: $origin_id})
-                              -[:METRO_LINK|RAIL_LINK|INTERCHANGE_TO*1..20]-
-                              (d {station_id: $dest_id})
+                    MATCH p = shortestPath(
+                                  (o {station_id: $origin_id})
+                                  -[:METRO_LINK|RAIL_LINK|INTERCHANGE_TO*1..10]-
+                                  (d {station_id: $dest_id}))
                     WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_TO')
                     RETURN nodes(p) AS path_nodes, relationships(p) AS path_rels
-                    ORDER BY length(p)
                     LIMIT 1
                     """,
                     origin_id=origin_id,

@@ -129,9 +129,9 @@ python3 skeleton/ui.py
 | ✅ | `graph/queries.py`：所有 Cypher 同步更新至新 label / relationship 名稱 |
 | ✅ | `query_cheapest_route`：fare_usd / fare_standard_usd / fare_first_usd 寫入邊屬性，Dijkstra 直接使用 |
 | ✅ | `query_station_connections`：移除 `r.network`，改用關係型別判斷 |
-| 🔴 | **`query_delay_ripple` — runtime bug，C5 評分直接失分** |
-| 🔴 | **`query_interchange_path` — 效能問題，C4 評分直接失分** |
-| 🟡 | **`query_alternative_routes` — 回傳重複路徑** |
+| ✅ | `query_delay_ripple` — C5 已由 PR #27 修正（`MATCH path =` + `min(length(path))`；文件舊標 🔴 是過時的，**請勿改回 `min(length(shortestPath(...)))`**） |
+| ✅ | `query_interchange_path` — C4 已修（`shortestPath(*1..10)` 取代 `*1..20` 全列舉） |
+| ✅ | `query_alternative_routes` — C3 已修（`WITH` + `RETURN DISTINCT` 去重） |
 
 #### 🔴 `query_delay_ripple` 問題詳述
 
