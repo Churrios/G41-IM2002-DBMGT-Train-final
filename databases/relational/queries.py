@@ -90,26 +90,27 @@ def query_national_rail_availability(
             cur.execute(
                 """
                 SELECT s.*,
-                       array_position(s.stops_in_order, %s) AS origin_pos,
-                       array_position(s.stops_in_order, %s) AS dest_pos,
+                       o_stop.stop_order AS origin_pos,
+                       d_stop.stop_order AS dest_pos,
                        COUNT(b.booking_id) AS booked_seats,
                        -- available_seats derived dynamically (seat_layouts total minus confirmed bookings)
                        -- rather than maintaining a separate occupancy table, to avoid sync issues
                        (SELECT COUNT(*) FROM seat_layouts sl
                         WHERE sl.schedule_id = s.schedule_id) - COUNT(b.booking_id) AS available_seats
                 FROM national_rail_schedules s
+                JOIN national_rail_schedule_stops o_stop
+                     ON o_stop.schedule_id = s.schedule_id AND o_stop.station_id = %s
+                JOIN national_rail_schedule_stops d_stop
+                     ON d_stop.schedule_id = s.schedule_id AND d_stop.station_id = %s
                 -- travel_date = NULL makes the join condition always FALSE (SQL 3-value logic),
                 -- so booked_seats = 0 and available_seats = total capacity when date is omitted.
                 LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
                                     AND (%s IS NULL OR b.travel_date = %s)
                                     AND b.status != 'cancelled'
-                WHERE s.stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
-                GROUP BY s.schedule_id
-                HAVING array_position(s.stops_in_order, %s) < array_position(s.stops_in_order, %s)
+                GROUP BY s.schedule_id, o_stop.stop_order, d_stop.stop_order
+                HAVING o_stop.stop_order < d_stop.stop_order
                 """,
-                (origin_id, destination_id, travel_date, travel_date,
-                 origin_id, destination_id,
-                 origin_id, destination_id),
+                (origin_id, destination_id, travel_date, travel_date),
             )
             return [dict(row) for row in cur.fetchall()]
 
@@ -172,18 +173,22 @@ def query_metro_schedules(origin_id: str, destination_id: str) -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT * FROM metro_schedules
-                WHERE stops_in_order @> ARRAY[%s, %s]::VARCHAR(10)[]
+                SELECT s.*,
+                       ARRAY(
+                           SELECT station_id FROM metro_schedule_stops
+                           WHERE schedule_id = s.schedule_id
+                           ORDER BY stop_order
+                       ) AS stops_in_order
+                FROM metro_schedules s
+                JOIN metro_schedule_stops o_stop
+                     ON o_stop.schedule_id = s.schedule_id AND o_stop.station_id = %s
+                JOIN metro_schedule_stops d_stop
+                     ON d_stop.schedule_id = s.schedule_id AND d_stop.station_id = %s
+                WHERE o_stop.stop_order < d_stop.stop_order
                 """,
                 (origin_id, destination_id),
             )
-            rows = cur.fetchall()
-    # Direction check done in Python: array_position() in a HAVING clause returns NULL
-    # for absent elements, making comparisons unreliable without extra COALESCE guards.
-    return [
-        dict(r) for r in rows
-        if r["stops_in_order"].index(origin_id) < r["stops_in_order"].index(destination_id)
-    ]
+            return [dict(r) for r in cur.fetchall()]
 
 
 def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
@@ -391,29 +396,32 @@ def execute_booking(
     conn.autocommit = False
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            # 1. Fetch schedule to get stop order, fares, and departure time
+            # 1. Fetch schedule fares and stop positions via junction table
             cur.execute(
                 """
-                SELECT stops_in_order, first_train_time,
-                       std_base_fare_usd, std_per_stop_rate_usd,
-                       first_base_fare_usd, first_per_stop_rate_usd
-                FROM national_rail_schedules
-                WHERE schedule_id = %s
+                SELECT s.first_train_time,
+                       s.std_base_fare_usd, s.std_per_stop_rate_usd,
+                       s.first_base_fare_usd, s.first_per_stop_rate_usd,
+                       o_stop.stop_order AS origin_pos,
+                       d_stop.stop_order AS dest_pos
+                FROM national_rail_schedules s
+                LEFT JOIN national_rail_schedule_stops o_stop
+                     ON o_stop.schedule_id = s.schedule_id AND o_stop.station_id = %s
+                LEFT JOIN national_rail_schedule_stops d_stop
+                     ON d_stop.schedule_id = s.schedule_id AND d_stop.station_id = %s
+                WHERE s.schedule_id = %s
                 """,
-                (schedule_id,),
+                (origin_station_id, destination_station_id, schedule_id),
             )
             schedule = cur.fetchone()
             if schedule is None:
                 return (False, "Schedule not found")
 
-            stops = list(schedule["stops_in_order"])
-            if origin_station_id not in stops or destination_station_id not in stops:
+            if schedule["origin_pos"] is None or schedule["dest_pos"] is None:
                 return (False, "Stations not on this route")
-            origin_pos = stops.index(origin_station_id)
-            dest_pos = stops.index(destination_station_id)
-            if origin_pos >= dest_pos:
+            if schedule["origin_pos"] >= schedule["dest_pos"]:
                 return (False, "Invalid route direction")
-            stops_count = dest_pos - origin_pos
+            stops_count = schedule["dest_pos"] - schedule["origin_pos"]
 
             # 2. Calculate fare
             if fare_class == "first":
