@@ -30,9 +30,9 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 
 | 函式 | 嚴重度 | 問題 |
 |------|--------|------|
-| C4 `query_interchange_path` | 🔴 | `*1..20` 變長路徑超時，Python 直接呼叫也無法回應 |
-| C5 `query_delay_ripple` | 🔴 | `shortestPath()` 放在 `min()` 內是 Cypher 語法錯誤，hops≥1 靜默回傳空陣列 |
-| C3 `query_alternative_routes` | 🟡 | 未去重，三條路線回傳內容完全相同 |
+| C4 `query_interchange_path` | ✅ | 已修（PR #30）：`shortestPath(*1..10)` 取代 `*1..20` 全列舉 |
+| C5 `query_delay_ripple` | ✅ | 已修（PR #27）：`MATCH path =` + `min(length(path))` |
+| C3 `query_alternative_routes` | ✅ | 已修（PR #30）：`WITH` + `RETURN DISTINCT` 去重 |
 
 修法已詳細寫在下方各問題區塊，黃可以直接複製 Cypher 修改。
 
@@ -60,18 +60,100 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 
 ---
 
-### 🟡 Step B — 決定 `stops_in_order` 是否改 junction table
+### 🔴 Step B — `stops_in_order` 改 junction table（三人協作）
 
-**背景**：現在 `metro_schedules` / `national_rail_schedules` 的 `stops_in_order` 用 `VARCHAR[]`，評分 Task 1 Normalisation 可能扣分。
+**修改理由**：`stops_in_order VARCHAR(10)[]` 使用 array 欄位儲存停靠站順序，違反 3NF——站的位置由 array index 決定，而非獨立的 primary key。評分標準明確點名「schedule stops must be in a separate junction table (not an array column)」，是 Task 1 Normalisation 扣分項。
 
-| 選項 | 工程量 | 評分影響 | Design Doc 說法 |
-|------|--------|---------|----------------|
-| 維持 `VARCHAR[]` | 不用改 | 可能扣分 | 說明為效能取捨，避免過多 JOIN |
-| 改為 junction table | 改 schema + queries，工程量中等 | 避免扣分 | 說明符合 3NF |
+**執行順序**：蔡先做（schema + queries）→ PR merge → 黃和蔣才能開始
 
-**三人需要給一個答案**，決定後：
-- 若改：蔡負責實作 schema 和 queries
-- 若不改：Design Document Section 2 需補一段設計理由
+**分工（各自負責自己的檔案）：**
+
+#### 🔵 蔡晟郁（先做，其他人等此 PR merge）
+
+**`databases/relational/schema.sql`：**
+
+移除：
+- `metro_schedules` 的 `stops_in_order VARCHAR(10)[] NOT NULL` 欄位
+- `national_rail_schedules` 的 `stops_in_order VARCHAR(10)[] NOT NULL` 欄位
+- `CREATE INDEX idx_metro_schedules_stops ... USING GIN (stops_in_order)`
+- `CREATE INDEX idx_nr_schedules_stops ... USING GIN (stops_in_order)`
+
+新增（放在 seat_layouts 之前）：
+```sql
+CREATE TABLE metro_schedule_stops (
+    schedule_id  VARCHAR(20)  NOT NULL REFERENCES metro_schedules(schedule_id) ON DELETE CASCADE,
+    stop_order   INT          NOT NULL,
+    station_id   VARCHAR(10)  NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
+    PRIMARY KEY (schedule_id, stop_order)
+);
+
+CREATE TABLE national_rail_schedule_stops (
+    schedule_id  VARCHAR(20)  NOT NULL REFERENCES national_rail_schedules(schedule_id) ON DELETE CASCADE,
+    stop_order   INT          NOT NULL,
+    station_id   VARCHAR(10)  NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
+    PRIMARY KEY (schedule_id, stop_order)
+);
+```
+
+**`databases/relational/queries.py`（3 個地方）：**
+
+1. `query_national_rail_availability`（line ~106–108）：
+   - 舊：`WHERE s.stops_in_order @> ARRAY[...]` + `HAVING array_position(...) < array_position(...)`
+   - 新：JOIN `national_rail_schedule_stops` 兩次（origin / dest），HAVING `o_stop.stop_order < d_stop.stop_order`
+
+2. `query_metro_schedules`（line ~175–185）：
+   - 舊：`WHERE stops_in_order @> ARRAY[...]` + Python `.index()` 過濾方向
+   - 新：JOIN `metro_schedule_stops` 兩次，SQL 直接比較 stop_order；並用 subquery 回傳 `stops_in_order` array，讓 agent.py 不需改：
+   ```sql
+   ARRAY(SELECT station_id FROM metro_schedule_stops
+         WHERE schedule_id = s.schedule_id ORDER BY stop_order) AS stops_in_order
+   ```
+
+3. `execute_booking`（line ~397–416）：
+   - 舊：SELECT `stops_in_order` → Python `.index()` 算 stops_count
+   - 新：JOIN `national_rail_schedule_stops` 取 o_stop.stop_order 和 d_stop.stop_order，`stops_count = d_stop_order - o_stop_order`
+
+#### 🟢 黃謙儒（等蔡的 PR merge 後再做）
+
+**`skeleton/seed_postgres.py`：**
+
+`seed_metro_schedules`：
+1. columns list 移除 `"stops_in_order"`，rows 對應值也移除
+2. insert 完 metro_schedules 後，接著 insert junction table：
+```python
+stop_rows = []
+for s in data:
+    for i, station_id in enumerate(s.get("stops_in_order", [])):
+        stop_rows.append((s["schedule_id"], i, station_id))
+insert_many(cur, "metro_schedule_stops",
+            ["schedule_id", "stop_order", "station_id"], stop_rows)
+print(f"Seeded {len(stop_rows)} metro schedule stops.")
+```
+
+`seed_national_rail_schedules`：同上邏輯，改用 `national_rail_schedule_stops`：
+```python
+stop_rows = []
+for s in data:
+    for i, station_id in enumerate(s.get("stops_in_order", [])):
+        stop_rows.append((s["schedule_id"], i, station_id))
+insert_many(cur, "national_rail_schedule_stops",
+            ["schedule_id", "stop_order", "station_id"], stop_rows)
+print(f"Seeded {len(stop_rows)} national rail schedule stops.")
+```
+
+#### 🟣 蔣耀德（等蔡的 PR merge 後確認）
+
+**`skeleton/agent.py`：**
+
+改動極小。蔡的 `query_metro_schedules` 會繼續回傳 `stops_in_order` key（用 subquery），所以 line 328 的 `sched.get("stops_in_order") or []` **不需要改**。
+
+但可以移除已無必要的 isinstance 檢查（line 329–331）：
+```python
+# 可刪除（蔡改完後 stops 永遠是 list，不會是 string）
+if isinstance(stops, str):
+    import json as _json
+    stops = _json.loads(stops)
+```
 
 ---
 
@@ -90,7 +172,12 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 | ✅ | `queries.py`：`query_user_profile` 補 `year_of_birth` |
 | ✅ | `seed_postgres.py`：`seed_seat_layouts` fare_class 讀 coach 層 |
 | ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
-| 🟡 | `schema.sql`：討論是否改 junction table 取代 `stops_in_order VARCHAR[]`（待三人決定） |
+| ✅ | `schema.sql`：新增 `metro_schedule_stops` / `national_rail_schedule_stops`，移除 `stops_in_order VARCHAR[]` 及其 GIN index |
+| ✅ | `queries.py`：`query_national_rail_availability`、`query_metro_schedules`、`execute_booking` 三處改 JOIN junction table |
+| 🔴 | **Design Document Section 1**：ER Diagram（dbdiagram.io 畫圖，含基數標注） |
+| 🔴 | **Design Document Section 2**：Normalisation Justification（3NF、bcrypt、trade-off） |
+| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ✅ | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改，已確認兩版皆已是最新） |
 | 🟡 | Policy JSON 擴充：確認評分標準是否要求新增條目，若要則補充四個 policy 檔並重跑 `seed_vectors.py` |
 | 🟡 | `databases/graph/seed.cypher`：確認內容是否已同步新 schema（`MetroStation`/`METRO_LINK`/`INTERCHANGE_TO`），評分 TA 可能直接看此檔 |
@@ -115,6 +202,10 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 | ✅ | `query_alternative_routes` — C3 已修（`WITH` + `RETURN DISTINCT` 去重，PR #30） |
 | ✅ | `graph/queries.py`：Driver 模式已定案 **維持 per-call**（Q10 決議） |
 | ✅ | `seed_neo4j.py`：`CREATE CONSTRAINT FOR (s:MetroStation) REQUIRE s.station_id IS UNIQUE` 已確認存在 |
+| 🔴 | **`skeleton/seed_postgres.py`**：`seed_metro_schedules` / `seed_national_rail_schedules` 移除 `stops_in_order`，改為 insert 到 `metro_schedule_stops` / `national_rail_schedule_stops` — 詳見 Step B（等蔡 PR merge 後才做） |
+| 🔴 | **Design Document Section 3**：Graph Database Design Rationale（nodes/relationships/properties 設計理由、Dijkstra vs SQL 論證） |
+| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ⭐ BONUS | `graph/queries.py`：新增 `BUS_LINK` 關係類型（公車接駁站點） |
 | ⭐ BONUS | `seed_neo4j.py`：節點加 `zone` 屬性（分區票價計算） |
 | ⭐ BONUS | GDS 演算法：PageRank 找最重要樞紐站、Louvain 社群偵測找路線集群（需在 docker-compose.yml 啟用 GDS plugin） |
@@ -197,8 +288,12 @@ LIMIT $max_routes
 | ✅ | `agent.py`：`search_policy` 接入 `rag.search_with_rerank`，reranker 正式進入 pipeline |
 | ✅ | `rag.py` / `reranker.py`：邏輯完整 |
 | — | `llm_provider.py`：老師標示不需修改，embed cache 略過 |
-| 🟡 | `databases/relational/queries.py`：`query_policy_vector_search` 加入 metadata filtering，可依 `category` 欄位先過濾再做 vector 比對，避免跨類別雜訊（SideNote2 建議）|
-| 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高 → 需實跑幾筆 query 確認 `query_policy_vector_search` 真的有回傳文件；必要時調低（如 0.3）|
+| 🟡 | `databases/relational/queries.py`：`query_policy_vector_search` 加入 metadata filtering |
+| 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高，必要時調低至 0.3 |
+| 🔴 | **`skeleton/agent.py` line 329–331**：移除 isinstance string check（蔡改完後 stops 永遠是 list）— 詳見 Step B（等蔡 PR merge 後確認） |
+| 🔴 | **Design Document Section 4**：Vector / RAG Design（cosine similarity、RAG pipeline、embedding dimension） |
+| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ⭐ BONUS | Policy JSON 新增條目：失物招領政策、團體訂票折扣（10人以上）、無障礙服務、計劃性停駛通知、逃票罰款（補充後重跑 `seed_vectors.py`） |
 
 ### 👥 三人共同
@@ -210,7 +305,7 @@ LIMIT $max_routes
 | 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
 | 🔴 | **Peer Review**：每人各自填 `PEER_REVIEW_TEMPLATE.md`（保密） |
 | ✅ | 確認評分 repo（`IM2002-grading-students/`）已在本地，已完整閱讀三份評分細則 |
-| 🔴 | **C4 `query_interchange_path` 超時 — Live Section C 8 分全丟，黃需修正** |
+| ✅ | **C4 `query_interchange_path` 超時 — 已修（PR #30，黃謙儒）** |
 | 🟡 | **Task 1 Normalisation**：`stops_in_order VARCHAR[]` 未改 junction table，評分明確要求此項，三人需決定是否修改 |
 | 🟡 | **STUDENT_GUIDE_CODE / LIVE 的狀態欄位已過時**（部分 ❌ 實際已修正），需更新 |
 | ⭐ BONUS | **Task 6 Bonus（+15 × 3 = +45）**：要拿 bonus 必須建立 `TASK6.md`（列所有改動）＋每個改動檔案頭加 `# TASK 6 EXTENSION:` comment ＋ Design Document 加 Section 7，缺 `TASK6.md` 則 bonus 不計分 |
@@ -219,7 +314,7 @@ LIMIT $max_routes
 | ⭐ BONUS | **Unit Test（pytest）**：為三個 DB 層各撰寫測試（蔡：`tests/test_relational.py`、黃：`tests/test_graph.py`、蔣：`tests/test_rag.py`）——程式碼完成後再做 |
 | 🟡 | **模組層級 docstring**：程式碼收尾後確認 `databases/relational/queries.py`、`databases/graph/queries.py`、`skeleton/seed_postgres.py`、`skeleton/seed_neo4j.py` 等檔案頭部是否有模組說明 docstring |
 | 🟡 | **`config.py` 預設埠**：`PG_PORT=5432`、`NEO4J_URI=bolt://localhost:7687` 與 Docker 映射（5433/7688）不符 → 靠 `.env` 補救，但建議改預設值或加 README 警語，避免新成員忘設 `.env` 時連線失敗 |
-| 🟡 | **`README.md` 最末行有 `hahahahah`**：繳交前必須刪除 |
+| ✅ | **`README.md` 最末行 `hahahahah`**：已刪除（PR #32） |
 
 ---
 
@@ -247,7 +342,7 @@ LIMIT $max_routes
 | Task 1 FK cascade ON DELETE | — | ✅ 已補 | ✅ |
 | Task 1 PK design comment | — | ✅ 已補 | ✅ |
 | Task 1 Delete strategy comment | — | ✅ 已補 | ✅ |
-| **Task 1 Normalisation（junction table）** | — | ❌ VARCHAR[] | 🔴 扣分 |
+| **Task 1 Normalisation（junction table）** | — | ✅ 已改（commit 99d206b） | ✅ |
 | Task 2 Query functions /30 | 30 | ✅ 15/15 | ✅ |
 | Task 3 Seeding /10 | 10 | ✅ | ✅ |
 | Task 4 Graph Design /8 | 8 | ✅ 黃已完成 | ✅ |

@@ -101,8 +101,9 @@ ALTER TABLE metro_stations
 
 -- ============================================================
 --  3. SCHEDULES
---  stops_in_order 用 VARCHAR[] — array_position() 查站序更簡潔
 --  travel_time_from_origin 用 JSONB — key-value map {"MS01": 0, ...}
+--  stops 移至 junction tables (metro_schedule_stops / national_rail_schedule_stops)
+--  以滿足 3NF：每個停靠站是獨立 row，位置由 stop_order 決定
 -- ============================================================
 
 CREATE TABLE metro_schedules (
@@ -112,7 +113,6 @@ CREATE TABLE metro_schedules (
     direction                VARCHAR(15)   NOT NULL,
     origin_station_id        VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
     destination_station_id   VARCHAR(10)   NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
-    stops_in_order           VARCHAR(10)[] NOT NULL,
     travel_time_from_origin  JSONB         NOT NULL,
     first_train_time         TIME          NOT NULL,
     last_train_time          TIME          NOT NULL,
@@ -122,8 +122,6 @@ CREATE TABLE metro_schedules (
     per_stop_rate_usd        NUMERIC(6,2)  NOT NULL CHECK (per_stop_rate_usd >= 0)
 );
 
-CREATE INDEX idx_metro_schedules_stops ON metro_schedules USING GIN (stops_in_order);
-
 CREATE TABLE national_rail_schedules (
     -- PK: VARCHAR(20) for longer schedule IDs (e.g. NR_SCH01)
     schedule_id               VARCHAR(20)   PRIMARY KEY,
@@ -132,7 +130,6 @@ CREATE TABLE national_rail_schedules (
     direction                 VARCHAR(15)   NOT NULL,
     origin_station_id         VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
     destination_station_id    VARCHAR(10)   NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
-    stops_in_order            VARCHAR(10)[] NOT NULL,
     passed_through_stations   VARCHAR(10)[],
     travel_time_from_origin   JSONB         NOT NULL,
     first_train_time          TIME          NOT NULL,
@@ -145,7 +142,21 @@ CREATE TABLE national_rail_schedules (
     first_per_stop_rate_usd   NUMERIC(6,2)  NOT NULL CHECK (first_per_stop_rate_usd >= 0)
 );
 
-CREATE INDEX idx_nr_schedules_stops ON national_rail_schedules USING GIN (stops_in_order);
+-- Junction tables for schedule stops (3NF: stop position is a proper FK row, not an array index)
+-- CASCADE: stops belong to a schedule and are removed when the schedule is deleted.
+CREATE TABLE metro_schedule_stops (
+    schedule_id  VARCHAR(20)  NOT NULL REFERENCES metro_schedules(schedule_id) ON DELETE CASCADE,
+    stop_order   INT          NOT NULL,
+    station_id   VARCHAR(10)  NOT NULL REFERENCES metro_stations(station_id) ON DELETE RESTRICT,
+    PRIMARY KEY (schedule_id, stop_order)
+);
+
+CREATE TABLE national_rail_schedule_stops (
+    schedule_id  VARCHAR(20)  NOT NULL REFERENCES national_rail_schedules(schedule_id) ON DELETE CASCADE,
+    stop_order   INT          NOT NULL,
+    station_id   VARCHAR(10)  NOT NULL REFERENCES national_rail_stations(station_id) ON DELETE RESTRICT,
+    PRIMARY KEY (schedule_id, stop_order)
+);
 
 -- ============================================================
 --  4. SEAT LAYOUTS  (靜態配置，每班車固定)
