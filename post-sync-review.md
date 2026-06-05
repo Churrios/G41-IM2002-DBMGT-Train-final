@@ -252,7 +252,7 @@ LIMIT $max_routes
 | Task 3 Seeding /10 | 10 | ✅ | ✅ |
 | Task 4 Graph Design /8 | 8 | ✅ 黃已完成 | ✅ |
 | Task 5 C1/C2/C3/C5/C6 | 9 | ✅ | ✅ |
-| **Task 5 C4 interchange path** | **1** | ⚠️ timeout | 🔴 失分 |
+| Task 5 C4 interchange path | 1 | ✅ 已修 (PR #30, shortestPath) | ✅ |
 | Code Quality /2 | 2 | ✅ WHY comments | ✅ |
 
 ### Live Testing（/100）
@@ -262,8 +262,8 @@ LIMIT $max_routes
 | Section A Seeding /15 | 15 | ✅ | ✅ |
 | Section B B1–B10 /50 | 50 | ✅ 全過 | ✅ |
 | Section C C1/C2/C5/C6 | 20 | ✅ | ✅ |
-| Section C C3 duplicate routes | 7 | ⚠️ 功能正確但重複 | 🟡 部分失分 |
-| **Section C C4 interchange path** | **8** | 🔴 timeout | 🔴 8 分全丟 |
+| Section C C3 duplicate routes | 7 | ✅ 已修 (PR #30, RETURN DISTINCT) | ✅ |
+| Section C C4 interchange path | 8 | ✅ 已修 (PR #30) | ✅ |
 
 ### Task 6 Bonus 條件（+15 × 3 = +45）
 
