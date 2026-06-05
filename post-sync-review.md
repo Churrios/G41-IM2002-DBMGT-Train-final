@@ -60,18 +60,30 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 
 ---
 
-### 🟡 Step B — 決定 `stops_in_order` 是否改 junction table
+### 🔴 Step B — `stops_in_order` 改 junction table（三人協作）
 
-**背景**：現在 `metro_schedules` / `national_rail_schedules` 的 `stops_in_order` 用 `VARCHAR[]`，評分 Task 1 Normalisation 可能扣分。
+**背景**：`stops_in_order VARCHAR[]` 被評分標準明確點名為扣分項（Task 1 Normalisation /40）。決定改為 junction table。
 
-| 選項 | 工程量 | 評分影響 | Design Doc 說法 |
-|------|--------|---------|----------------|
-| 維持 `VARCHAR[]` | 不用改 | 可能扣分 | 說明為效能取捨，避免過多 JOIN |
-| 改為 junction table | 改 schema + queries，工程量中等 | 避免扣分 | 說明符合 3NF |
+**分工（各自負責自己的檔案）：**
 
-**三人需要給一個答案**，決定後：
-- 若改：蔡負責實作 schema 和 queries
-- 若不改：Design Document Section 2 需補一段設計理由
+#### 🔵 蔡晟郁
+- `databases/relational/schema.sql`：
+  - 新增 `metro_schedule_stops(schedule_id, stop_order, station_id)` junction table
+  - 新增 `national_rail_schedule_stops(schedule_id, stop_order, station_id)` junction table
+  - 移除 `metro_schedules.stops_in_order VARCHAR[]` 欄位
+  - 移除 `national_rail_schedules.stops_in_order VARCHAR[]` 欄位
+- `databases/relational/queries.py`：
+  - 把所有 `array_position(s.stops_in_order, ...)` 改成 JOIN + `ORDER BY stop_order`
+  - 把所有 `stops_in_order @> ARRAY[...]` 改成 subquery/EXISTS 確認兩站都在該班次
+
+#### 🟢 黃謙儒
+- `skeleton/seed_postgres.py`：
+  - `seed_metro_schedules`：seeding 時同步 insert 到 `metro_schedule_stops`
+  - `seed_national_rail_schedules`：seeding 時同步 insert 到 `national_rail_schedule_stops`
+
+#### 🟣 蔣耀德
+- `skeleton/agent.py` line 328：
+  - `sched.get("stops_in_order") or []` 改成從 query 回來的新格式（junction table 回傳的 stops list）
 
 ---
 
