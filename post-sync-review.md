@@ -172,8 +172,8 @@ if isinstance(stops, str):
 | ✅ | `queries.py`：`query_user_profile` 補 `year_of_birth` |
 | ✅ | `seed_postgres.py`：`seed_seat_layouts` fare_class 讀 coach 層 |
 | ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
-| 🔴 | `schema.sql`：新增 `metro_schedule_stops` / `national_rail_schedule_stops`，移除 `stops_in_order VARCHAR[]` 及其 GIN index — 詳見 Step B |
-| 🔴 | `queries.py`：`query_national_rail_availability`、`query_metro_schedules`、`execute_booking` 三處改 JOIN junction table — 詳見 Step B |
+| ✅ | `schema.sql`：新增 `metro_schedule_stops` / `national_rail_schedule_stops`，移除 `stops_in_order VARCHAR[]` 及其 GIN index |
+| ✅ | `queries.py`：`query_national_rail_availability`、`query_metro_schedules`、`execute_booking` 三處改 JOIN junction table |
 | 🔴 | **Design Document Section 1**：ER Diagram（dbdiagram.io 畫圖，含基數標注） |
 | 🔴 | **Design Document Section 2**：Normalisation Justification（3NF、bcrypt、trade-off） |
 | 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
@@ -342,7 +342,7 @@ LIMIT $max_routes
 | Task 1 FK cascade ON DELETE | — | ✅ 已補 | ✅ |
 | Task 1 PK design comment | — | ✅ 已補 | ✅ |
 | Task 1 Delete strategy comment | — | ✅ 已補 | ✅ |
-| **Task 1 Normalisation（junction table）** | — | ❌ VARCHAR[] | 🔴 扣分 |
+| **Task 1 Normalisation（junction table）** | — | ✅ 已改（commit 99d206b） | ✅ |
 | Task 2 Query functions /30 | 30 | ✅ 15/15 | ✅ |
 | Task 3 Seeding /10 | 10 | ✅ | ✅ |
 | Task 4 Graph Design /8 | 8 | ✅ 黃已完成 | ✅ |
