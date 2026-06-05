@@ -1,6 +1,103 @@
 # Post-Sync Review — TransitFlow 整合檢查
 
-> 更新：2026-06-04 | 範圍：Sync 2 完成後 + 課堂討論整合
+> 更新：2026-06-05 | 範圍：所有個人代辦完成後，三人共同下一步
+
+---
+
+## 本次工作紀錄（蔡晟郁，2026-06-05）
+
+> 本節說明今天蔡完成了哪些事、發現了什麼問題，讓黃和蔣同步狀況。
+
+### 修正的 bug（蔡的檔案）
+
+| 檔案 | 問題 | 影響 |
+|------|------|------|
+| `seed_postgres.py` | `seed_seat_layouts`：`fare_class` 從 `seat` 層讀，應從 `coach` 層讀，導致值為 `None` → 整個 PG seeding rollback，資料庫一筆資料都沒有 | 所有 B 系列 live testing 全部失敗 |
+| `seed_postgres.py` | `seed_metro_travels`：mock data 的 `stops_travelled` 有 null，schema 設 `NOT NULL`，改為 `or 0` | seeding 過程中 IntegrityError |
+| `queries.py` | `login_user`：未拆分 `full_name` → `first_name` / `surname`，但 `ui.py` 直接使用這兩個 key，登入成功後立刻 `KeyError` crash | 登入功能完全壞掉 |
+| `queries.py` | `query_user_profile`：未回傳 `year_of_birth`，改為 `date_of_birth.year`，評分 B6 要求此欄位 | B6 評分失分 |
+| `schema.sql` | HNSW index 語法：`CREATE INDEX IF NOT EXISTS ON ...` 缺少 index 名稱，PostgreSQL 會 syntax error，index 根本沒建 | 向量搜尋退化成 seq scan |
+
+### 環境建立過程
+
+- 從無到有完整建立本機環境（venv、.env、Docker、Ollama）
+- Ollama 需使用官方安裝，Homebrew 版缺少 `llama-server` binary 無法跑模型
+- 跑通三個 seed scripts：PG（修正後）、vectors（101 chunks）、Neo4j（20站、66條邊）
+
+### 全量 Python 測試結果
+
+B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案**）：
+
+| 函式 | 嚴重度 | 問題 |
+|------|--------|------|
+| C4 `query_interchange_path` | 🔴 | `*1..20` 變長路徑超時，Python 直接呼叫也無法回應 |
+| C5 `query_delay_ripple` | 🔴 | `shortestPath()` 放在 `min()` 內是 Cypher 語法錯誤，hops≥1 靜默回傳空陣列 |
+| C3 `query_alternative_routes` | 🟡 | 未去重，三條路線回傳內容完全相同 |
+
+修法已詳細寫在下方各問題區塊，黃可以直接複製 Cypher 修改。
+
+### UI 測試觀察（llama3.2:1b 行為）
+
+- 模型頻繁選錯 tool（例如問 user profile 卻叫 get_bookings、問 station connections 卻傳 schema 作為參數）
+- 模型會在呼叫 tool 前先「猜」答案，有時直接幻覺，不看資料庫
+- **所有 tool 的回傳資料本身都正確**，問題出在 LLM 選 tool 的邏輯
+- TA 若直接呼叫 Python function 測試，所有正確的函式都會通過
+
+詳細測試紀錄見：[live-testing-notes.md](live-testing-notes.md)
+
+---
+
+## 零、立即下一步（三人共同討論）
+
+### 🔴 Step A — 環境跑通（今天優先）
+
+找一個人完整執行以下流程，確認沒有 traceback：
+
+```bash
+# 1. 建立虛擬環境並安裝套件
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. 複製環境變數（若還沒做）
+cp .env.example .env
+
+# 3. 啟動 Docker
+docker compose up -d
+docker compose ps   # 確認 healthy
+
+# 4. Seed 三個資料庫
+python3 skeleton/seed_postgres.py
+ollama serve &      # 另開終端機先確認 ollama 跑起來
+ollama pull llama3.2:1b
+ollama pull nomic-embed-text
+python3 skeleton/seed_vectors.py
+python3 skeleton/seed_neo4j.py
+
+# 5. 啟動 UI 驗證
+python3 skeleton/ui.py
+```
+
+跑通後在下方記錄結果：
+- [x] seed_postgres 無 traceback（修正 stops_travelled null → 0）
+- [x] seed_vectors 無 traceback（101 chunks 存入）
+- [x] seed_neo4j 無 traceback（20 MetroStation, 10 NationalRailStation, 42 METRO_LINK, 18 RAIL_LINK, 6 INTERCHANGE_TO）
+- [ ] ui.py 可正常開啟並登入
+
+---
+
+### 🟡 Step B — 決定 `stops_in_order` 是否改 junction table
+
+**背景**：現在 `metro_schedules` / `national_rail_schedules` 的 `stops_in_order` 用 `VARCHAR[]`，評分 Task 1 Normalisation 可能扣分。
+
+| 選項 | 工程量 | 評分影響 | Design Doc 說法 |
+|------|--------|---------|----------------|
+| 維持 `VARCHAR[]` | 不用改 | 可能扣分 | 說明為效能取捨，避免過多 JOIN |
+| 改為 junction table | 改 schema + queries，工程量中等 | 避免扣分 | 說明符合 3NF |
+
+**三人需要給一個答案**，決定後：
+- 若改：蔡負責實作 schema 和 queries
+- 若不改：Design Document Section 2 需補一段設計理由
 
 ---
 
@@ -13,10 +110,14 @@
 | ✅ | `schema.sql`：所有 FK 加 `ON DELETE`（16 條，RESTRICT / SET NULL / CASCADE） |
 | ✅ | `schema.sql`：PK 設計說明 comment（header + 每個表格 PK 欄位） |
 | ✅ | `schema.sql`：soft delete 策略 comment（`is_active` 欄位） |
+| ✅ | `schema.sql`：HNSW index 補上名稱（語法修正） |
 | ✅ | `queries.py`：5 個函式加 inline WHY comment |
-| ✅ | 移除 `queries.py:68` TODO scaffold comment |
-| ✅ | `execute_cancellation` metro 邊界確認：agent 層 `cancel_booking` description 已限定 national rail，無需改動 |
-| 🟡 | `schema.sql`：與組員討論是否改用 junction table 取代 `stops_in_order VARCHAR[]`（影響 Task 1 Normalisation 評分） |
+| ✅ | `queries.py`：`login_user` 補 `first_name` / `surname` 拆分 |
+| ✅ | `queries.py`：`query_user_profile` 補 `year_of_birth` |
+| ✅ | `seed_postgres.py`：`seed_seat_layouts` fare_class 讀 coach 層 |
+| ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
+| 🟡 | `schema.sql`：討論是否改 junction table 取代 `stops_in_order VARCHAR[]`（待三人決定） |
+| 🟡 | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改） |
 
 ### 🟢 黃謙儒（Graph DB）
 
@@ -28,33 +129,97 @@
 | ✅ | `graph/queries.py`：所有 Cypher 同步更新至新 label / relationship 名稱 |
 | ✅ | `query_cheapest_route`：fare_usd / fare_standard_usd / fare_first_usd 寫入邊屬性，Dijkstra 直接使用 |
 | ✅ | `query_station_connections`：移除 `r.network`，改用關係型別判斷 |
+| 🔴 | **`query_delay_ripple` — runtime bug，C5 評分直接失分** |
+| 🔴 | **`query_interchange_path` — 效能問題，C4 評分直接失分** |
+| 🟡 | **`query_alternative_routes` — 回傳重複路徑** |
+
+#### 🔴 `query_delay_ripple` 問題詳述
+
+**症狀**：呼叫 `query_delay_ripple('MS07', hops=2)` 回傳空陣列，應有 8 站。
+
+**根因**：Cypher 中 `shortestPath()` 不能放在聚合函式 `min()` 內部：
+```cypher
+-- 目前（有 bug）
+min(length(shortestPath(
+    (s)-[:METRO_LINK|RAIL_LINK*]-(affected)
+))) AS hops_away
+```
+Neo4j 在某些 `affected` 等於 `s`（起終點相同）時拋出 `Neo.DatabaseError`，函式的 `except` 靜默吞掉錯誤並回傳 `[]`。
+
+**修法**：在 MATCH 裡命名 path 變數，改用 `min(length(path))`：
+```cypher
+-- 修正後
+MATCH path = (s {station_id: $station_id})
+      -[:METRO_LINK|RAIL_LINK*1..{safe_hops}]-
+      (affected)
+RETURN DISTINCT
+    affected.station_id AS station_id,
+    affected.name       AS name,
+    min(length(path))   AS hops_away,
+    affected.lines      AS lines_affected
+ORDER BY hops_away
+```
+
+---
+
+#### 🔴 `query_interchange_path` 問題詳述
+
+**症狀**：呼叫 `query_interchange_path('MS01', 'NR05')` 超時（>60 秒），直接呼叫 Python function 也無回應。
+
+**根因**：`*1..20` 變長路徑要在全圖搜尋所有長度 ≤ 20 的路徑再過濾，組合數量爆炸（30 個站 × 20 跳）：
+```cypher
+-- 目前（效能問題）
+MATCH p = (o {station_id: $origin_id})
+          -[:METRO_LINK|RAIL_LINK|INTERCHANGE_TO*1..20]-
+          (d {station_id: $dest_id})
+WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_TO')
+```
+
+**修法**：改用 `shortestPath()` 讓 Neo4j 使用內建最短路徑演算法，上限降為 10：
+```cypher
+-- 修正後
+MATCH p = shortestPath((o {station_id: $origin_id})
+          -[:METRO_LINK|RAIL_LINK|INTERCHANGE_TO*1..10]-
+          (d {station_id: $dest_id}))
+WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_TO')
+RETURN nodes(p) AS path_nodes, relationships(p) AS path_rels
+LIMIT 1
+```
+
+---
+
+#### 🟡 `query_alternative_routes` 問題詳述
+
+**症狀**：`query_alternative_routes('MS01','MS09', avoid='MS07', max_routes=3)` 回傳 3 條路線但內容完全相同。
+
+**根因**：變長路徑比對會產生多條「節點相同但邊走法不同」的重複路徑，RETURN 時未去重。
+
+**修法**：先用 `WITH` 計算 route 和 total_time_min，再 `RETURN DISTINCT`：
+```cypher
+-- 修正後
+WITH [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
+     reduce(t = 0, r IN relationships(p) | t + r.travel_time_min) AS total_time_min
+RETURN DISTINCT route, total_time_min
+ORDER BY total_time_min
+LIMIT $max_routes
+```
 
 ### 🟣 蔣耀德（Vector / LLM）
 
 | 優先 | 項目 |
 |------|------|
-| ✅ | `llm_provider.py`：補 `embed()` module-level `_embed_cache` dict |
-
-```python
-_embed_cache: dict[str, tuple[float, ...]] = {}
-
-def embed(self, text: str) -> List[float]:
-    if text in _embed_cache:
-        return list(_embed_cache[text])
-    result = self._ollama_embed(text) if self._embed_provider == "ollama" else self._gemini_embed(text)
-    _embed_cache[text] = tuple(result)
-    return result
-```
+| ✅ | `agent.py`：`search_policy` 接入 `rag.search_with_rerank`，reranker 正式進入 pipeline |
+| ✅ | `rag.py` / `reranker.py`：邏輯完整 |
+| — | `llm_provider.py`：老師標示不需修改，embed cache 略過 |
 
 ### 👥 三人共同
 
 | 優先 | 項目 |
 |------|------|
-| 🔴 | **Design Document**：撰寫六章節（建議分工：蔡 Sec1+2，黃 Sec3，蔣 Sec4，三人共 Sec5+6） |
+| ✅ | **本機環境設定**（Steps 2–12）：蔡已跑通全套，seed 全數成功 |
+| 🔴 | **Design Document**：各自負責章節後合併（蔡 Sec1+2，黃 Sec3，蔣 Sec4，三人共 Sec5+6） |
 | 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
-| 🔴 | **Peer Review**：每人各自填 `PEER_REVIEW_TEMPLATE.md` |
-| 🔴 | **本機環境設定**（Steps 2–12）：至少一人跑通全套 seed scripts，確認 live testing 可執行 |
-| 🟡 | 黃改好 graph schema 後，蔡同步更新 `AI_SESSION_CONTEXT.md`（中英兩版） |
+| 🔴 | **Peer Review**：每人各自填 `PEER_REVIEW_TEMPLATE.md`（保密） |
 
 ---
 
