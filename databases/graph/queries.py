@@ -368,16 +368,17 @@ def query_delay_ripple(delayed_station_id: str, hops: int = 2) -> list[dict]:
                 if safe_hops == 0:
                     return [start_dict]
 
-                # Named path variable lets us use min(length(path)) directly.
-                # shortestPath() inside min() is not valid Cypher syntax.
+                # int() + f-string: Cypher does not accept $param for variable-length upper bound
                 cypher = f"""
-                    MATCH path = (s {{station_id: $station_id}})
+                    MATCH (s {{station_id: $station_id}})
                           -[:METRO_LINK|RAIL_LINK*1..{safe_hops}]-
                           (affected)
                     RETURN DISTINCT
                         affected.station_id AS station_id,
                         affected.name       AS name,
-                        min(length(path))   AS hops_away,
+                        min(length(shortestPath(
+                            (s)-[:METRO_LINK|RAIL_LINK*]-(affected)
+                        )))                 AS hops_away,
                         affected.lines      AS lines_affected
                     ORDER BY hops_away
                 """

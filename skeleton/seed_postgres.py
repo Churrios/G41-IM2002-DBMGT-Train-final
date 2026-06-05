@@ -333,7 +333,7 @@ def seed_metro_travels(cur):
             t.get("travel_date"),
             t.get("ticket_type"),
             t.get("day_pass_ref"),
-            t.get("stops_travelled"),
+            t.get("stops_travelled") or 0,  # NOT NULL DEFAULT 0; JSON may have null
             t.get("amount_usd"),
             t.get("status"),
             t.get("purchased_at"),
