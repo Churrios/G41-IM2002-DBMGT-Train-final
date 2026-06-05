@@ -30,9 +30,9 @@ B1–B10 全部函式正確。C 系列發現三個問題（**黃謙儒的檔案*
 
 | 函式 | 嚴重度 | 問題 |
 |------|--------|------|
-| C4 `query_interchange_path` | 🔴 | `*1..20` 變長路徑超時，Python 直接呼叫也無法回應 |
-| C5 `query_delay_ripple` | 🔴 | `shortestPath()` 放在 `min()` 內是 Cypher 語法錯誤，hops≥1 靜默回傳空陣列 |
-| C3 `query_alternative_routes` | 🟡 | 未去重，三條路線回傳內容完全相同 |
+| C4 `query_interchange_path` | ✅ | 已修（PR #30）：`shortestPath(*1..10)` 取代 `*1..20` 全列舉 |
+| C5 `query_delay_ripple` | ✅ | 已修（PR #27）：`MATCH path =` + `min(length(path))` |
+| C3 `query_alternative_routes` | ✅ | 已修（PR #30）：`WITH` + `RETURN DISTINCT` 去重 |
 
 修法已詳細寫在下方各問題區塊，黃可以直接複製 Cypher 修改。
 
@@ -210,7 +210,7 @@ LIMIT $max_routes
 | 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
 | 🔴 | **Peer Review**：每人各自填 `PEER_REVIEW_TEMPLATE.md`（保密） |
 | ✅ | 確認評分 repo（`IM2002-grading-students/`）已在本地，已完整閱讀三份評分細則 |
-| 🔴 | **C4 `query_interchange_path` 超時 — Live Section C 8 分全丟，黃需修正** |
+| ✅ | **C4 `query_interchange_path` 超時 — 已修（PR #30，黃謙儒）** |
 | 🟡 | **Task 1 Normalisation**：`stops_in_order VARCHAR[]` 未改 junction table，評分明確要求此項，三人需決定是否修改 |
 | 🟡 | **STUDENT_GUIDE_CODE / LIVE 的狀態欄位已過時**（部分 ❌ 實際已修正），需更新 |
 | ⭐ BONUS | **Task 6 Bonus（+15 × 3 = +45）**：要拿 bonus 必須建立 `TASK6.md`（列所有改動）＋每個改動檔案頭加 `# TASK 6 EXTENSION:` comment ＋ Design Document 加 Section 7，缺 `TASK6.md` 則 bonus 不計分 |
@@ -219,7 +219,7 @@ LIMIT $max_routes
 | ⭐ BONUS | **Unit Test（pytest）**：為三個 DB 層各撰寫測試（蔡：`tests/test_relational.py`、黃：`tests/test_graph.py`、蔣：`tests/test_rag.py`）——程式碼完成後再做 |
 | 🟡 | **模組層級 docstring**：程式碼收尾後確認 `databases/relational/queries.py`、`databases/graph/queries.py`、`skeleton/seed_postgres.py`、`skeleton/seed_neo4j.py` 等檔案頭部是否有模組說明 docstring |
 | 🟡 | **`config.py` 預設埠**：`PG_PORT=5432`、`NEO4J_URI=bolt://localhost:7687` 與 Docker 映射（5433/7688）不符 → 靠 `.env` 補救，但建議改預設值或加 README 警語，避免新成員忘設 `.env` 時連線失敗 |
-| 🟡 | **`README.md` 最末行有 `hahahahah`**：繳交前必須刪除 |
+| ✅ | **`README.md` 最末行 `hahahahah`**：已刪除（PR #32） |
 
 ---
 
