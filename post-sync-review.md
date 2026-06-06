@@ -293,6 +293,7 @@ LIMIT $max_routes
 | 🟡 | `databases/relational/queries.py`：`query_policy_vector_search` 加入 metadata filtering |
 | 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高，必要時調低至 0.3 |
 | 🟡 | **embedding 維度驗證（J2）**：seed 後實際跑 `query_policy_vector_search` 確認有回結果；若切換至 Gemini provider（dim=3072）需同步改 `schema.sql` 的 `vector(768)` 並重新 seed |
+| 🔴 | **`skeleton/agent.py`：`query_station_connections` 未接入 agent**：函式存在於 `databases/graph/queries.py:403` 但未 import、未加入 TOOLS list、未加入 TOOLS_SCHEMA、未加入 `_execute_tool` handler → C6 透過 chatbot 完全不可觸發。需補：1) import `query_station_connections`，2) 加 `get_station_connections` tool 定義，3) 加入 TOOLS_SCHEMA，4) 加入 `_execute_tool` |
 | 🔴 | **`skeleton/agent.py` line 329–331**：移除 isinstance string check（蔡改完後 stops 永遠是 list）— 詳見 Step B（等蔡 PR merge 後確認） |
 | 🔴 | **Design Document Section 4**：Vector / RAG Design（cosine similarity、RAG pipeline、embedding dimension） |
 | 🔴 | **Work Allocation Report**：在 `WORK_ALLOCATION.md` 補上：Student ID、GitHub username、email、簽名（蔣耀德目前全部空白） |
@@ -359,7 +360,8 @@ LIMIT $max_routes
 |------|------|------|------|
 | Section A Seeding /15 | 15 | ✅ | ✅ |
 | Section B B1–B10 /50 | 50 | ✅ 全過 | ✅ |
-| Section C C1/C2/C5/C6 | 20 | ✅ | ✅ |
+| Section C C1/C2/C5 | 15 | ✅ | ✅ |
+| Section C C6 (`query_station_connections`) | 5 | 🔴 未接入 agent，chatbot 不可觸發 | 🔴 蔣需補 agent.py |
 | Section C C3 duplicate routes | 7 | ✅ 已修 (PR #30, RETURN DISTINCT) | ✅ |
 | Section C C4 interchange path | 8 | ✅ 已修 (PR #30) | ✅ |
 
