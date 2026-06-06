@@ -4,7 +4,7 @@
 
 ## 1.1 ER Diagram
 
-<!-- 步驟：將下方 dbdiagram.io DSL 貼入 https://dbdiagram.io/d → 匯出圖片 → 替換此 comment -->
+[ER Diagram (PDF)](er-diagram.pdf)
 
 ### dbdiagram.io DSL（貼入工具後匯出圖片）
 

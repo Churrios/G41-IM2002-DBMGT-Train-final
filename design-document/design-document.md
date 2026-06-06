@@ -11,7 +11,7 @@
 
 ## 1.1 ER Diagram
 
-<!-- 插入 dbdiagram.io / draw.io 匯出的圖片 -->
+[ER Diagram (PDF)](er-diagram.pdf)
 
 ## 1.2 Entity Overview
 
