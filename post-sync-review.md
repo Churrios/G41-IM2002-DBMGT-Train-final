@@ -174,9 +174,9 @@ if isinstance(stops, str):
 | ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
 | ✅ | `schema.sql`：新增 `metro_schedule_stops` / `national_rail_schedule_stops`，移除 `stops_in_order VARCHAR[]` 及其 GIN index |
 | ✅ | `queries.py`：`query_national_rail_availability`、`query_metro_schedules`、`execute_booking` 三處改 JOIN junction table |
-| 🔴 | **Design Document Section 1**：ER Diagram（dbdiagram.io 畫圖，含基數標注） |
-| 🔴 | **Design Document Section 2**：Normalisation Justification（3NF、bcrypt、trade-off） |
-| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| ✅ | **Design Document Section 1**：ER Diagram（含圖片，commit f0671bb） |
+| ✅ | **Design Document Section 2**：Normalisation Justification（commit 852e2d6） |
+| ✅ | **Work Allocation Report**：蔡晟郁部分已填（commit d8d384c），黃蔣需補 Student ID / GitHub / 簽名 |
 | 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ✅ | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改，已確認兩版皆已是最新） |
 | 🟡 | Policy JSON 擴充：確認評分標準是否要求新增條目，若要則補充四個 policy 檔並重跑 `seed_vectors.py` |
