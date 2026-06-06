@@ -179,8 +179,8 @@ if isinstance(stops, str):
 | ✅ | **Work Allocation Report**：蔡晟郁部分已填（commit d8d384c），黃蔣需補 Student ID / GitHub / 簽名 |
 | 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ✅ | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改，已確認兩版皆已是最新） |
-| 🟡 | Policy JSON 擴充：確認評分標準是否要求新增條目，若要則補充四個 policy 檔並重跑 `seed_vectors.py` |
-| 🟡 | `databases/graph/seed.cypher`：確認內容是否已同步新 schema（`MetroStation`/`METRO_LINK`/`INTERCHANGE_TO`），評分 TA 可能直接看此檔 |
+| ✅ | Policy JSON 擴充：評分標準明確標示 policy_documents 為 scaffold，不需新增條目 |
+| ✅ | `databases/graph/seed.cypher`：已確認同步新 schema（MetroStation/NationalRailStation/METRO_LINK/RAIL_LINK/INTERCHANGE_TO） |
 | ⭐ BONUS | `schema.sql`：新增 `delay_records` 表（記錄運營方回報的誤點） |
 | ⭐ BONUS | `schema.sql`：新增 `season_tickets` 表（捷運週/月/年票） |
 | ⭐ BONUS | `schema.sql`：新增 `platform_assignments` 表（各服務月台號） |
