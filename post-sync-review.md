@@ -175,7 +175,7 @@ if isinstance(stops, str):
 | ✅ | `schema.sql`：新增 `metro_schedule_stops` / `national_rail_schedule_stops`，移除 `stops_in_order VARCHAR[]` 及其 GIN index |
 | ✅ | `queries.py`：`query_national_rail_availability`、`query_metro_schedules`、`execute_booking` 三處改 JOIN junction table |
 | ✅ | **Design Document Section 1 DSL**：ER Diagram DSL 已修正（payments 移除錯誤 FK，commit 766b1ef） |
-| ✅ | **`design-document/er-diagram.pdf`**：ER 圖已匯出並嵌入 section1 + design-document.md（commit 73db738） |
+| ✅ | **`design-document/er-diagram.png`**：ER 圖 PNG 嵌入 section1 + design-document.md（commit 6fe3b16）；PDF 連結同時保留 |
 | ✅ | **`design-document/design-document.md` Section 1.2**：Entity 表格已修正（commit 44fe4e9） |
 | ✅ | **Design Document Section 2**：Normalisation Justification（commit bd0f18f） |
 | ✅ | **Work Allocation Report**：蔡晟郁部分已填（commit d8d384c），黃蔣需補 Student ID / GitHub / 簽名 |
