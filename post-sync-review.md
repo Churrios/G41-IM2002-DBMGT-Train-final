@@ -290,6 +290,7 @@ LIMIT $max_routes
 | — | `llm_provider.py`：老師標示不需修改，embed cache 略過 |
 | 🟡 | `databases/relational/queries.py`：`query_policy_vector_search` 加入 metadata filtering |
 | 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高，必要時調低至 0.3 |
+| 🟡 | **embedding 維度驗證（J2）**：seed 後實際跑 `query_policy_vector_search` 確認有回結果；若切換至 Gemini provider（dim=3072）需同步改 `schema.sql` 的 `vector(768)` 並重新 seed |
 | 🔴 | **`skeleton/agent.py` line 329–331**：移除 isinstance string check（蔡改完後 stops 永遠是 list）— 詳見 Step B（等蔡 PR merge 後確認） |
 | 🔴 | **Design Document Section 4**：Vector / RAG Design（cosine similarity、RAG pipeline、embedding dimension） |
 | 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |

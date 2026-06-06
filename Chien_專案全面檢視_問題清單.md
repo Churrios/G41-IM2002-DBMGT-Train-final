@@ -22,7 +22,7 @@
 | J1 | ✅ | 蔣耀德 | `rag.search_with_rerank` 沒被 `agent.py` 接上，reranking 功能在 Live Testing 不會被觸發 |
 | J2 | 🟡 | 蔣耀德 | embedding 維度（768/3072）與相似度門檻需依實際 provider 驗證 |
 | S1 | 🟡 | 共用 | `config.py` 預設埠（5432/7687）與 docker（5433/7688）不一致，靠 `.env` 補救 |
-| S2 | 🟡 | 共用 | 各檔「為什麼這樣設計」的 inline 註解偏少（Code Quality /1–2）|
+| S2 | ✅ | 共用 | 各檔「為什麼這樣設計」的 inline 註解偏少（Code Quality /1–2）|
 
 ---
 
@@ -191,7 +191,7 @@ docs = search_with_rerank(embedding, params["query"], top_k=VECTOR_TOP_K)
 1. ✅ A1、A2（不修就跑不起來 / 登不進去）→ 蔡已處理。
 2. ✅ C1（Graph 重寫）→ 黃已完成。
 3. ✅ A3、A4 → 已修。✅ J1 → 蔣已完成。
-4. ✅ A5、🟡 S2 → 蔡已補 schema 細節與部分註解。
+4. ✅ A5、✅ S2 → 蔡已補 schema 細節與 5 個函式 WHY comments。
 
 ### 後續追加修正
 - ✅ `query_delay_ripple`：`shortestPath()` 不能放在 `min()` 內部（Neo4j 語法限制）→ 改用 `min(length(path))` 搭配命名 path 變數。
