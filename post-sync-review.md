@@ -179,7 +179,7 @@ if isinstance(stops, str):
 | 🔴 | **`design-document/design-document.md` Section 1.1**：同上，加圖片嵌入 |
 | 🔴 | **`design-document/design-document.md` Section 1.2**：Entity 表格有 3 錯誤需修正：(1) `metro_schedules` 移除 `stops_in_order` (2) `payments` 改為「`booking_id`（無 FK）」 (3) 補 `metro_schedule_stops`、`national_rail_schedule_stops` 兩行 |
 | 🟡 | **`design-document/er-diagram.png`**：重新從 dbdiagram.io 匯出圖片（DSL 已修，舊圖有多餘的 payments→bookings 關係線） |
-| 🔴 | **Design Document Section 2**：`section2-normalisation.md` 仍是 template（本地 + PR branch 均為空）；commit 852e2d6 的內容已被 revert，需重新寫入 |
+| ✅ | **Design Document Section 2**：Normalisation Justification（commit bd0f18f） |
 | ✅ | **Work Allocation Report**：蔡晟郁部分已填（commit d8d384c），黃蔣需補 Student ID / GitHub / 簽名 |
 | 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ✅ | `AI_SESSION_CONTEXT.md`：同步更新中英兩版（graph schema 已改，已確認兩版皆已是最新） |
