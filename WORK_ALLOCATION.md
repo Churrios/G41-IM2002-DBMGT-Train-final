@@ -10,8 +10,8 @@
 
 | Full Name | Student ID | GitHub Username | Email |
 |-----------|-----------|----------------|-------|
-| 蔡晟郁 | | Churrios (repo owner) | |
-| 黃謙儒 | | | |
+| 蔡晟郁 | | | |
+| 黃謙儒 | | Churrios (repo owner) | |
 | 蔣耀德 | | | |
 
 ---
