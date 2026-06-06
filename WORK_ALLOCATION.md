@@ -10,7 +10,7 @@
 
 | Full Name | Student ID | GitHub Username | Email |
 |-----------|-----------|----------------|-------|
-| 蔡晟郁 | | | |
+| 蔡晟郁 | 113409526 | leotsai940914 | qqq113579@gmail.com |
 | 黃謙儒 | | Churrios (repo owner) | |
 | 蔣耀德 | | | |
 
