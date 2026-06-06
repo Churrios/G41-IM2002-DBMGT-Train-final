@@ -111,7 +111,7 @@ $2b$12$<22字元salt><31字元hash>
 
 ---
 
-# Section 3 — 圖資料庫設計理由
+# Section 3 — Graph Database Design Rationale
 
 > 負責人：黃謙儒
 
@@ -133,7 +133,7 @@ $2b$12$<22字元salt><31字元hash>
 
 ---
 
-# Section 4 — 向量資料庫 / RAG 設計
+# Section 4 — Vector / RAG Design
 
 > 負責人：蔣耀德
 
