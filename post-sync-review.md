@@ -301,13 +301,13 @@ LIMIT $max_routes
 | 優先 | 項目 |
 |------|------|
 | ✅ | **本機環境設定**（Steps 2–12）：蔡已跑通全套，seed 全數成功 |
-| 🔴 | **Design Document**：各自負責章節後合併（蔡 Sec1+2，黃 Sec3，蔣 Sec4，三人共 Sec5+6） |
-| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🟡 | **Design Document**：蔡 Sec1+2+5+6 ✅；黃 Sec3 🔴；蔣 Sec4 🔴 |
+| 🟡 | **Work Allocation Report**：蔡已填（`WORK_ALLOCATION.md`），黃蔣需補 Student ID / GitHub / 簽名 |
 | 🔴 | **Peer Review**：每人各自填 `PEER_REVIEW_TEMPLATE.md`（保密） |
 | ✅ | 確認評分 repo（`IM2002-grading-students/`）已在本地，已完整閱讀三份評分細則 |
 | ✅ | **C4 `query_interchange_path` 超時 — 已修（PR #30，黃謙儒）** |
-| 🟡 | **Task 1 Normalisation**：`stops_in_order VARCHAR[]` 未改 junction table，評分明確要求此項，三人需決定是否修改 |
-| 🟡 | **STUDENT_GUIDE_CODE / LIVE 的狀態欄位已過時**（部分 ❌ 實際已修正），需更新 |
+| ✅ | **Task 1 Normalisation**：`stops_in_order VARCHAR[]` 已改 junction table（PR #34） |
+| ✅ | **STUDENT_GUIDE_CODE / LIVE 狀態欄位**：已於各節更新 |
 | ⭐ BONUS | **Task 6 Bonus（+15 × 3 = +45）**：要拿 bonus 必須建立 `TASK6.md`（列所有改動）＋每個改動檔案頭加 `# TASK 6 EXTENSION:` comment ＋ Design Document 加 Section 7，缺 `TASK6.md` 則 bonus 不計分 |
 | ⭐ BONUS | `agent.py`：新增額外 tool（如 `get_platform`、`query_disruptions`）並接入 pipeline |
 | ⭐ BONUS | `ui.py`：客製化介面（調整 EXAMPLES 列表、版面、顏色主題） |
