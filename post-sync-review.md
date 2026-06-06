@@ -326,7 +326,7 @@ LIMIT $max_routes
 | 項目 | 方式 | 狀態 |
 |------|------|------|
 | Code Repository | GitHub repo link → EEClass | ✅ |
-| Design Document | Markdown/PDF → EEClass | 🟡 蔡 Sec1+5+6 ✅，Sec2 🔴 template，黃 Sec3 🔴，蔣 Sec4 🔴 |
+| Design Document | Markdown/PDF → EEClass | 🟡 蔡 Sec1+2+5+6 ✅；黃 Sec3 🔴；蔣 Sec4 🔴 |
 | Work Allocation Report | `WORK_ALLOCATION_TEMPLATE.md` → EEClass | 🟡 蔡已填，黃蔣需補 Student ID / GitHub / 簽名 |
 | Peer Review Report | 每人個別填 → EEClass（保密） | ❌ 未填 |
 
