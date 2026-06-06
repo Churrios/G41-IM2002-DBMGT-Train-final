@@ -177,7 +177,7 @@ if isinstance(stops, str):
 | ✅ | **Design Document Section 1 DSL**：ER Diagram DSL 已修正（payments 移除錯誤 FK，commit 766b1ef） |
 | 🔴 | **`design-document/section1-er-diagram.md`**：嵌入圖片（加 `![ER Diagram](er-diagram.png)` 這行，需先完成圖片重匯出） |
 | 🔴 | **`design-document/design-document.md` Section 1.1**：同上，加圖片嵌入 |
-| 🔴 | **`design-document/design-document.md` Section 1.2**：Entity 表格有 3 錯誤需修正：(1) `metro_schedules` 移除 `stops_in_order` (2) `payments` 改為「`booking_id`（無 FK）」 (3) 補 `metro_schedule_stops`、`national_rail_schedule_stops` 兩行 |
+| ✅ | **`design-document/design-document.md` Section 1.2**：Entity 表格已修正（commit 44fe4e9） |
 | 🟡 | **`design-document/er-diagram.png`**：重新從 dbdiagram.io 匯出圖片（DSL 已修，舊圖有多餘的 payments→bookings 關係線） |
 | ✅ | **Design Document Section 2**：Normalisation Justification（commit bd0f18f） |
 | ✅ | **Work Allocation Report**：蔡晟郁部分已填（commit d8d384c），黃蔣需補 Student ID / GitHub / 簽名 |
