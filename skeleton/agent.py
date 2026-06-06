@@ -326,9 +326,6 @@ def _execute_tool(
             else:
                 sched = schedules[0]
                 stops = sched.get("stops_in_order") or []
-                if isinstance(stops, str):
-                    import json as _json
-                    stops = _json.loads(stops)
                 try:
                     n_stops = stops.index(params["destination_id"]) - stops.index(params["origin_id"])
                 except ValueError:
