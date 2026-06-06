@@ -206,7 +206,7 @@ if isinstance(stops, str):
 | ✅ | `seed_neo4j.py`：`CREATE CONSTRAINT FOR (s:MetroStation) REQUIRE s.station_id IS UNIQUE` 已確認存在 |
 | 🔴 | **`skeleton/seed_postgres.py`**：`seed_metro_schedules` / `seed_national_rail_schedules` 移除 `stops_in_order`，改為 insert 到 `metro_schedule_stops` / `national_rail_schedule_stops` — 詳見 Step B（等蔡 PR merge 後才做） |
 | 🔴 | **Design Document Section 3**：Graph Database Design Rationale（nodes/relationships/properties 設計理由、Dijkstra vs SQL 論證） |
-| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Work Allocation Report**：在 `WORK_ALLOCATION.md` 補上：Student ID、GitHub username、email、簽名（黃謙儒目前缺 Student ID / email / 簽名） |
 | 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ⭐ BONUS | `graph/queries.py`：新增 `BUS_LINK` 關係類型（公車接駁站點） |
 | ⭐ BONUS | `seed_neo4j.py`：節點加 `zone` 屬性（分區票價計算） |
@@ -295,7 +295,7 @@ LIMIT $max_routes
 | 🟡 | **embedding 維度驗證（J2）**：seed 後實際跑 `query_policy_vector_search` 確認有回結果；若切換至 Gemini provider（dim=3072）需同步改 `schema.sql` 的 `vector(768)` 並重新 seed |
 | 🔴 | **`skeleton/agent.py` line 329–331**：移除 isinstance string check（蔡改完後 stops 永遠是 list）— 詳見 Step B（等蔡 PR merge 後確認） |
 | 🔴 | **Design Document Section 4**：Vector / RAG Design（cosine similarity、RAG pipeline、embedding dimension） |
-| 🔴 | **Work Allocation Report**：填寫 `WORK_ALLOCATION_TEMPLATE.md` |
+| 🔴 | **Work Allocation Report**：在 `WORK_ALLOCATION.md` 補上：Student ID、GitHub username、email、簽名（蔣耀德目前全部空白） |
 | 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 | ⭐ BONUS | Policy JSON 新增條目：失物招領政策、團體訂票折扣（10人以上）、無障礙服務、計劃性停駛通知、逃票罰款（補充後重跑 `seed_vectors.py`） |
 
