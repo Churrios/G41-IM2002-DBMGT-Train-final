@@ -1,7 +1,9 @@
 # Section 4: Vector / RAG Design
 
-## 4.1 Cosine Similarity
-Cosine similarity 非常適合用來評估語意相似度，因為它是 **magnitude-independent**（不受向量長度影響）。它不是去測量兩個點之間的絕對距離，而是**測量 embedding space 中的方向相似度**。這代表即使文本長度或詞彙頻率不同，只要兩個文件表達的語意方向一致，就能獲得很高的相似度分數。
+## 4.1 Embedding 對象與 Cosine Similarity
+在本系統中，被轉換為 embedding 的對象是**政策文件 (Policy Documents)**，包含各類票務與退費規則。
+
+在比對使用者查詢與政策文件時，**Cosine similarity** 非常適合用來評估語意相似度，因為它是 **magnitude-independent**（不受向量長度影響）。它不是去測量兩個點之間的絕對距離，而是**測量 embedding space 中的方向相似度**。這代表即使文本長度或詞彙頻率不同，只要兩個文件表達的語意方向一致，就能獲得很高的相似度分數。
 
 ## 4.2 Retrieval-Augmented Generation (RAG) Pipeline
 我們的 RAG pipeline 完整運作包含以下四個階段：
