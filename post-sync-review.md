@@ -174,7 +174,8 @@ if isinstance(stops, str):
 | ✅ | `seed_postgres.py`：`seed_metro_travels` stops_travelled null → 0 |
 | ✅ | `schema.sql`：新增 `metro_schedule_stops` / `national_rail_schedule_stops`，移除 `stops_in_order VARCHAR[]` 及其 GIN index |
 | ✅ | `queries.py`：`query_national_rail_availability`、`query_metro_schedules`、`execute_booking` 三處改 JOIN junction table |
-| ✅ | **Design Document Section 1**：ER Diagram（含圖片，commit f0671bb） |
+| ✅ | **Design Document Section 1**：ER Diagram DSL 已修正（payments 移除錯誤 FK，commit 766b1ef） |
+| 🟡 | **`design-document/er-diagram.png`**：重新從 dbdiagram.io 匯出圖片（DSL 已修，舊圖有多餘的 payments→bookings 關係線） |
 | ✅ | **Design Document Section 2**：Normalisation Justification（commit 852e2d6） |
 | ✅ | **Work Allocation Report**：蔡晟郁部分已填（commit d8d384c），黃蔣需補 Student ID / GitHub / 簽名 |
 | 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
