@@ -4,6 +4,8 @@
 
 ## 1.1 ER Diagram
 
+![ER Diagram](er-diagram.png)
+
 [ER Diagram (PDF)](er-diagram.pdf)
 
 ### dbdiagram.io DSL（貼入工具後匯出圖片）

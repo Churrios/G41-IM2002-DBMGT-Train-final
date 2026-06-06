@@ -11,6 +11,8 @@
 
 ## 1.1 ER Diagram
 
+![ER Diagram](er-diagram.png)
+
 [ER Diagram (PDF)](er-diagram.pdf)
 
 ## 1.2 Entity Overview
