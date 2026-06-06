@@ -316,7 +316,7 @@ LIMIT $max_routes
 | ⭐ BONUS | **Unit Test（pytest）**：為三個 DB 層各撰寫測試（蔡：`tests/test_relational.py`、黃：`tests/test_graph.py`、蔣：`tests/test_rag.py`）——程式碼完成後再做 |
 | 🟡 | **模組層級 docstring**：程式碼收尾後確認 `databases/relational/queries.py`、`databases/graph/queries.py`、`skeleton/seed_postgres.py`、`skeleton/seed_neo4j.py` 等檔案頭部是否有模組說明 docstring |
 | 🟡 | **`config.py` 預設埠**：`PG_PORT=5432`、`NEO4J_URI=bolt://localhost:7687` 與 Docker 映射（5433/7688）不符 → 靠 `.env` 補救，但建議改預設值或加 README 警語，避免新成員忘設 `.env` 時連線失敗 |
-| ✅ | **`README.md` 最末行 `hahahahah`**：已刪除（PR #32） |
+
 
 ---
 
