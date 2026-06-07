@@ -12,6 +12,10 @@ Note: Gemini free tier has ~1500 requests/minute — this script makes ~13 calls
 
 Students: To extend the assistant's knowledge, add entries to the JSON files in
 train-mock-data/ and re-run this script.
+
+跨檔案互動：
+  - 呼叫 databases/relational/queries.py → store_policy_document()
+  - 讀取 train-mock-data/ 目錄下的 JSON 檔案
 """
 
 import json

@@ -18,6 +18,12 @@ Functions prefixed with `execute_` are write operations (booking/cancellation).
 
 The vector functions (query_policy_vector_search, store_policy_document)
 are already implemented — do not modify them.
+
+跨檔案互動：
+  - 被 skeleton/agent.py 呼叫 → 執行各類關聯式查詢與寫入操作（預訂、票價計算等）
+  - 被 skeleton/seed_postgres.py 呼叫 → 初始化與寫入基礎資料
+  - 被 skeleton/rag.py 呼叫 → query_policy_vector_search() 執行向量相似度搜尋
+  - 依賴 skeleton/config.py → 讀取 PG_DSN 連線設定
 """
 
 from __future__ import annotations

@@ -1,3 +1,22 @@
+"""
+TransitFlow — RAG (Retrieval-Augmented Generation) Pipeline
+============================================================
+負責將使用者的自然語言查詢轉換為向量搜尋，並對結果重新排序。
+
+用途：
+  - 接收查詢字串，從 PostgreSQL pgvector 取回相關政策文件段落
+  - 透過 reranker 對結果做二次排序，提升相關性
+
+跨檔案互動：
+  - 呼叫 databases/relational/queries.py → query_policy_vector_search()
+  - 呼叫 skeleton/reranker.py → rerank()
+  - 被 skeleton/agent.py → _execute_tool() 呼叫（search_policy tool）
+
+使用方式：
+  from skeleton.rag import search_with_rerank
+  results = search_with_rerank("cancellation policy", top_k=5)
+"""
+
 from databases.relational.queries import query_policy_vector_search
 from skeleton.reranker import rerank
 

@@ -1,3 +1,21 @@
+"""
+TransitFlow — Cross-Encoder Reranker
+=====================================
+使用 sentence-transformers CrossEncoder 對向量搜尋結果做精確重排序。
+
+用途：
+  - 向量搜尋（ANN）速度快但精度有限；reranker 對 top-K 結果做精確比對
+  - 模型為 lazy load，首次呼叫時載入，後續複用同一實例
+
+跨檔案互動：
+  - 被 skeleton/rag.py → search_with_rerank() 呼叫
+  - 不直接依賴任何其他模組
+
+使用方式：
+  from skeleton.reranker import rerank
+  ranked = rerank(query, passages)
+"""
+
 from sentence_transformers import CrossEncoder
 
 
