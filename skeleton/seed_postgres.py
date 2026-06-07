@@ -138,9 +138,9 @@ def seed_metro_schedules(cur):
     """
     data = load("metro_schedules.json")
     columns = [
-        "schedule_id", "line", "direction", "origin_station_id", 
-        "destination_station_id", "stops_in_order", "travel_time_from_origin", 
-        "first_train_time", "last_train_time", "frequency_min", 
+        "schedule_id", "line", "direction", "origin_station_id",
+        "destination_station_id", "travel_time_from_origin",
+        "first_train_time", "last_train_time", "frequency_min",
         "operates_on", "base_fare_usd", "per_stop_rate_usd"
     ]
     rows = []
@@ -151,7 +151,6 @@ def seed_metro_schedules(cur):
             s.get("direction"),
             s.get("origin_station_id"),
             s.get("destination_station_id"),
-            s.get("stops_in_order", []),
             json.dumps(s.get("travel_time_from_origin_min", {})),
             s.get("first_train_time"),
             s.get("last_train_time"),
@@ -173,17 +172,17 @@ def seed_national_rail_schedules(cur):
     """
     data = load("national_rail_schedules.json")
     columns = [
-        "schedule_id", "line", "service_type", "direction", "origin_station_id", 
-        "destination_station_id", "stops_in_order", "passed_through_stations", 
-        "travel_time_from_origin", "first_train_time", "last_train_time", 
-        "frequency_min", "operates_on", "std_base_fare_usd", "std_per_stop_rate_usd", 
+        "schedule_id", "line", "service_type", "direction", "origin_station_id",
+        "destination_station_id", "passed_through_stations",
+        "travel_time_from_origin", "first_train_time", "last_train_time",
+        "frequency_min", "operates_on", "std_base_fare_usd", "std_per_stop_rate_usd",
         "first_base_fare_usd", "first_per_stop_rate_usd"
     ]
     rows = []
     for s in data:
         fare_std = s.get("fare_classes", {}).get("standard", {})
         fare_first = s.get("fare_classes", {}).get("first", {})
-        
+
         rows.append((
             s.get("schedule_id"),
             s.get("line"),
@@ -191,7 +190,6 @@ def seed_national_rail_schedules(cur):
             s.get("direction"),
             s.get("origin_station_id"),
             s.get("destination_station_id"),
-            s.get("stops_in_order", []),
             None,
             json.dumps(s.get("travel_time_from_origin_min", {})),
             s.get("first_train_time"),
@@ -206,6 +204,47 @@ def seed_national_rail_schedules(cur):
         
     inserted = insert_many(cur, "national_rail_schedules", columns, rows)
     print(f"Seeded {inserted} national rail schedules.")
+
+
+def seed_metro_schedule_stops(cur):
+    """
+    Seed metro_schedule_stops junction table from the stops_in_order array in
+    metro_schedules.json. Each stop becomes one row (schedule_id, stop_order,
+    station_id) so the stop position is a proper FK row rather than an array index
+    (3NF). stop_order is the 0-based array index — queries only compare relative
+    order, so the base does not matter.
+    """
+    data = load("metro_schedules.json")
+    rows = []
+    for s in data:
+        schedule_id = s.get("schedule_id")
+        for stop_order, station_id in enumerate(s.get("stops_in_order", [])):
+            rows.append((schedule_id, stop_order, station_id))
+
+    inserted = insert_many(
+        cur, "metro_schedule_stops",
+        ["schedule_id", "stop_order", "station_id"], rows
+    )
+    print(f"Seeded {inserted} metro schedule stops.")
+
+
+def seed_national_rail_schedule_stops(cur):
+    """
+    Seed national_rail_schedule_stops junction table from the stops_in_order array
+    in national_rail_schedules.json. Same 3NF structure as metro_schedule_stops.
+    """
+    data = load("national_rail_schedules.json")
+    rows = []
+    for s in data:
+        schedule_id = s.get("schedule_id")
+        for stop_order, station_id in enumerate(s.get("stops_in_order", [])):
+            rows.append((schedule_id, stop_order, station_id))
+
+    inserted = insert_many(
+        cur, "national_rail_schedule_stops",
+        ["schedule_id", "stop_order", "station_id"], rows
+    )
+    print(f"Seeded {inserted} national rail schedule stops.")
 
 
 def seed_seat_layouts(cur):
@@ -409,7 +448,9 @@ def main():
         seed_national_rail_stations(cur)
         update_metro_interchange(cur)
         seed_metro_schedules(cur)
+        seed_metro_schedule_stops(cur)
         seed_national_rail_schedules(cur)
+        seed_national_rail_schedule_stops(cur)
         seed_seat_layouts(cur)
         seed_national_rail_bookings(cur)
         seed_metro_travels(cur)
