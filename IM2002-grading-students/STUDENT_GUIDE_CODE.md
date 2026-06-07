@@ -29,10 +29,10 @@ is assessed separately during live testing (see `STUDENT_GUIDE_LIVE.md`).
 | **Primary & foreign key correctness** — every table has a PK; FKs link correctly | Every table has a clearly defined PK; every FK references a valid column in the parent table | ✅ |
 | **Data types** — NUMERIC/DECIMAL for fares, TIMESTAMPTZ for datetimes, BOOLEAN for flags | Correct types used consistently; e.g. no `TEXT` for numeric fare values | ✅ |
 | **Password storage** — hashed with bcrypt / argon2 / scrypt / PBKDF2 | A strong adaptive hashing algorithm is used; plain-text or weak hashing fails the project. | ✅ bcrypt |
-| **Normalisation** — schedule stops in a separate junction table (not an array column) | Stop sequences live in their own table with a stop_order column | ❌ 用 VARCHAR[] |
-| **PK design decision** — UUID vs SERIAL chosen and justified in a comment | A comment near the PK column explains *why* that type was chosen | ❌ 無 comment |
-| **Delete strategy** — soft or hard delete applied consistently; strategy commented | One strategy used throughout; a comment explains the choice | ❌ 無 comment |
-| **FK cascade behaviour** — ON DELETE CASCADE / RESTRICT / SET NULL specified | Each FK explicitly states cascade behaviour | ❌ 未指定 |
+| **Normalisation** — schedule stops in a separate junction table (not an array column) | Stop sequences live in their own table with a stop_order column | ✅ metro_schedule_stops / national_rail_schedule_stops（PR #34）|
+| **PK design decision** — UUID vs SERIAL chosen and justified in a comment | A comment near the PK column explains *why* that type was chosen | ✅ schema.sql line 31–34 |
+| **Delete strategy** — soft or hard delete applied consistently; strategy commented | One strategy used throughout; a comment explains the choice | ✅ is_active soft delete + comment |
+| **FK cascade behaviour** — ON DELETE CASCADE / RESTRICT / SET NULL specified | Each FK explicitly states cascade behaviour | ✅ 全部 FK 已指定 |
 | **Task 1 Total** | | |
 
 > Do not implement the `policy_documents` table or its HNSW index — these are provided as scaffold.
@@ -118,10 +118,10 @@ is handled in code. Whether the scripts run without errors is assessed during li
 
 | Criterion | What earns full marks | 狀態 |
 |-----------|-----------------------|------|
-| `MetroStation` and `NationalRailStation` node labels with correct properties | Both node types present with all required properties | ❌ 用單一 `Station` label |
-| `METRO_LINK` and `RAIL_LINK` relationships with `travel_time_min` property | Both relationship types present; travel_time_min is a numeric property on each relationship | ❌ 用 `CONNECTS_TO` |
-| `INTERCHANGE_TO` relationships at cross-network stations (metro↔rail) | Interchange relationships connect the appropriate metro and rail stations | ❌ 用 `INTERCHANGE_WITH` |
-| **Task 4 Total** | | ⚠️ 高風險 |
+| `MetroStation` and `NationalRailStation` node labels with correct properties | Both node types present with all required properties | ✅ 已改為 split labels |
+| `METRO_LINK` and `RAIL_LINK` relationships with `travel_time_min` property | Both relationship types present; travel_time_min is a numeric property on each relationship | ✅ 已改為 METRO_LINK / RAIL_LINK |
+| `INTERCHANGE_TO` relationships at cross-network stations (metro↔rail) | Interchange relationships connect the appropriate metro and rail stations | ✅ 已改為 INTERCHANGE_TO（雙向）|
+| **Task 4 Total** | | ✅ |
 
 ---
 
@@ -137,7 +137,7 @@ Half marks = Cypher present but algorithm choice wrong or return shape incorrect
 | `query_shortest_route(origin_id, destination_id, network)` | APOC Dijkstra or equivalent; returns dict with `path` (list) and `total_time_min` (numeric) | ✅ |
 | `query_cheapest_route(origin_id, destination_id, network, fare_class)` | Edges weighted by cost; `fare_class` visibly affects edge weights; correct return shape | ✅ |
 | `query_alternative_routes(origin_id, destination_id, avoid_station_id, network, max_routes)` | Returned paths exclude the avoided station; `max_routes` limit respected | ✅ |
-| `query_interchange_path(origin_id, destination_id)` | Cross-network path traverses `INTERCHANGE_TO` edges; result includes nodes from both networks | ⚠️ 用 INTERCHANGE_WITH |
+| `query_interchange_path(origin_id, destination_id)` | Cross-network path traverses `INTERCHANGE_TO` edges; result includes nodes from both networks | ✅ 已改用 INTERCHANGE_TO（PR #30）|
 | `query_delay_ripple(delayed_station_id, hops)` | Returns all stations within N hops; each result includes `hops_away` count | ✅ |
 | `query_station_connections(station_id)` | Returns direct neighbours with `travel_time_min` per neighbour | ✅ |
 | **Task 5 Total** | | |
@@ -148,7 +148,7 @@ Half marks = Cypher present but algorithm choice wrong or return shape incorrect
 
 | Criterion | Max | What earns full marks | 狀態 |
 |-----------|-----|-----------------------|------|
-| Non-obvious SQL/Cypher logic has inline comments explaining *why* (not just what) | 1 | At least 3–5 non-trivial functions have comments explaining design choices, not just restating the code | ❌ 幾乎無 comment |
+| Non-obvious SQL/Cypher logic has inline comments explaining *why* (not just what) | 1 | At least 3–5 non-trivial functions have comments explaining design choices, not just restating the code | ✅ 5+ 函式有 WHY comment |
 | No dead stubs: every function either works or is explicitly marked as not attempted | 1 | No silent empty functions; `NotImplementedError` or a clear comment used where not implemented | ✅ 無 NotImplementedError |
 
 ---
