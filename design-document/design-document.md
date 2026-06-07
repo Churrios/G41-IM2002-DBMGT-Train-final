@@ -51,25 +51,83 @@
 
 ---
 
-# Section 3 — Graph Database Design Rationale
+# Section 3 — 圖形資料庫設計理由
 
 > 負責人：黃謙儒
 
+本系統的雙軌路網（城市捷運 M1–M4 + 國鐵 NR1–NR2）以 **Neo4j 圖形資料庫**建模，專責處理「路徑」類查詢：最短路徑、最便宜路徑、繞站替代路線、跨網換乘路徑、誤點漣漪分析。關聯式資料庫（PostgreSQL）負責交易性資料（訂位、付款、座位），兩者各取所長。實際拓撲：**30 個節點**（20 個 MetroStation + 10 個 NationalRailStation）、**66 條邊**（42 條 METRO_LINK + 18 條 RAIL_LINK + 6 條 INTERCHANGE_TO）。
+
 ## 3.1 Node / Relationship / Property 設計選擇
 
-<!-- 說明什麼資料存成 node、relationship、property，各自說明設計理由 -->
+### 節點（Node）：車站
+
+我們把**車站**設計成節點，理由不只是「車站是一個實體」，而是車站具備節點該有的特徵：(1) **被多條路線、多筆班次重複引用（多對多）**——MS01 同時屬於 M1、M2 並被多筆 schedule 引用，節點天然支援多對多；(2) **是 pattern matching（圖形遍歷）的對象**——所有路由查詢本質都是「從某站沿連線走到另一站」；(3) **需要穩定身分**，能跨班次、跨網路被一致參照（見 §3.4）。
+
+**為何採分離標籤（split-label）而非單一 `Station`**：拆成 `MetroStation` 與 `NationalRailStation` 兩種標籤，而非單一 `Station` 加 `network` 屬性。理由：對齊評分 / 測試標準（Task 4、Live 以 label 名稱明文檢查）；查詢可用關係型別 `'METRO_LINK|RAIL_LINK'` 把遍歷限制在同網內，使「同網最短」與「跨網換乘」成為語意清楚的兩種查詢；兩網屬性集本就不同（捷運站有 `is_interchange_national_rail`，國鐵站有 `is_interchange_metro`、`interchange_metro_station_id`）。
+
+### 關係（Relationship）：車站之間的連線
+
+| 關係型別 | 連接 | 用途 |
+|----------|------|------|
+| `METRO_LINK` | `(MetroStation)→(MetroStation)` | 捷運區段 |
+| `RAIL_LINK` | `(NationalRailStation)→(NationalRailStation)` | 國鐵區段 |
+| `INTERCHANGE_TO` | `(MetroStation)↔(NationalRailStation)` | 跨網實體換乘 |
+
+連線適合做關係而非另一張表，因為它具備關係的本質：(1) **有方向性**——班次有行進方向，以有向邊建模，Dijkstra 可沿方向遍歷（`INTERCHANGE_TO` 刻意建雙向兩條有向邊，使換乘可雙向通行）；(2) **承載屬性**——每條連線帶有「通過這段花多少時間、多少錢」的資訊，這是**邊的屬性**，不屬於任何單一車站。這正是圖形勝過關聯式 FK 之處：relational FK 只能表達「A 與 B 有關聯」，無法在關聯**上**自然掛載 `travel_time_min`、`fare_usd`；圖形的關係則可以。
+
+### 屬性（Property）：放在節點還是邊上
+
+屬性歸屬遵循「屬性描述的是誰」：**節點上**放 `station_id`、`name`、`lines`、`is_interchange_*`（描述車站本身）；**邊上**放 `METRO_LINK` 的 `line`/`travel_time_min`/`fare_usd`、`RAIL_LINK` 的 `line`/`travel_time_min`/`fare_standard_usd`/`fare_first_usd`、`INTERCHANGE_TO` 的 `transfer_time_min`（固定 5 分鐘；換乘不走實體軌道故無 `travel_time_min`）。把時間與票價放在**邊上**的原因：(1) 它們是「通過某區段」的成本，本質是邊的屬性；(2) 它們是最短路徑演算法的**權重來源**——`apoc.algo.dijkstra` 直接讀邊上的權重屬性計算。票價在 seeding 時即寫進邊，使「最便宜路徑」能直接以 `fare_*_usd` 當權重跑 Dijkstra，讓 fare_class 真正改變被選到的**路徑**而非只改總額。
 
 ## 3.2 Graph vs Relational 論證
 
-<!-- 具體演算法論證：Dijkstra on graph vs SQL recursive CTE -->
+路由查詢本質上是**加權圖上的圖遍歷問題**。我們主張圖形優於關聯式，理由是具體的演算法差異，而非籠統的「graph 比較快」。
+
+**圖形作法**：Neo4j 以 **index-free adjacency** 儲存——每個節點直接持有指向鄰居關係的指標，「取得某站所有鄰站」是 **O(1)**（與全圖大小無關）、無需 join。在此之上，最短路徑用 `apoc.algo.dijkstra`（加權 Dijkstra，約 **O((V + E) log V)**）或 `shortestPath()`（無權 BFS，找到第一條即停），只觸碰實際可達的子圖。
+
+**關聯式作法**：SQL 沒有原生圖遍歷，要表達「找最短路徑」須用 **recursive CTE**：(1) 每層遞迴都要對 edge 表做一次 join，結果集隨深度**組合爆炸**；(2) 必須在每條中間路徑攜帶「已訪節點」清單以**防環**，帶來額外儲存與比對成本；(3) **沒有「找到最短就停」的原生機制**，會展開**所有**符合路徑最後才 `MIN` 取最短，無法提早剪枝。節點稍多、路徑稍長時，中間結果指數膨脹而超時。
+
+**本專案實證**：`query_interchange_path` 最初用 `-[...*1..20]-` 變長**全列舉**，在僅 30 節點的圖上對較遠站對就 **>30 秒超時**（正是「展開所有路徑」的組合爆炸）；改用 `shortestPath()`（BFS，找到第一條即回傳）後同樣查詢 **<1 秒**完成。同一個圖、同一個問題，演算法從「窮舉」換成「BFS 提早停止」就是數量級差距——這就是圖形模型適合路由查詢的根本原因。
 
 ## 3.3 查詢類型說明
 
-<!-- 描述 shortest path + interchange path 兩種查詢，說明 graph model 如何使其得以表達 -->
+**查詢一：同網最短路徑（`query_shortest_route`）**
+
+```cypher
+MATCH (o {station_id: $origin_id}), (d {station_id: $dest_id})
+CALL apoc.algo.dijkstra(o, d, 'METRO_LINK|RAIL_LINK', 'travel_time_min')
+YIELD path, weight
+RETURN [n IN nodes(path) | {station_id: n.station_id, name: n.name}] AS stations,
+       weight AS total_time_min
+```
+
+graph model 如何使其可表達：關係型別過濾 `'METRO_LINK|RAIL_LINK'` 讓遍歷只走同網軌道邊，**刻意排除** `INTERCHANGE_TO`，故同網不可達時自然回 `found=False`；`travel_time_min` 存在邊上直接當 Dijkstra 權重；把權重參數換成 `'fare_usd'`/`'fare_standard_usd'` 即變成最便宜路徑查詢（`query_cheapest_route`），複用同一套圖結構。
+
+**查詢二：跨網換乘路徑（`query_interchange_path`）**
+
+```cypher
+MATCH p = shortestPath(
+            (o {station_id: $origin_id})
+            -[:METRO_LINK|RAIL_LINK|INTERCHANGE_TO*1..10]-
+            (d {station_id: $dest_id}))
+WHERE any(r IN relationships(p) WHERE type(r) = 'INTERCHANGE_TO')
+RETURN nodes(p) AS path_nodes, relationships(p) AS path_rels
+```
+
+graph model 如何使其可表達：關鍵在於**把三種關係型別混在同一個 pattern** 裡遍歷——軌道邊負責網內移動，`INTERCHANGE_TO` 負責跨越捷運↔國鐵邊界，一條路徑可「捷運走幾站 → 經 INTERCHANGE_TO 換到國鐵 → 國鐵再走幾站」全在單一查詢表達；`WHERE any(... INTERCHANGE_TO)` 保證確實有換乘。同樣需求在關聯式中須跨多張停靠表與換乘對應表做多重 UNION 再包進 recursive CTE 才能勉強表達。
+
+> （第三種查詢 `query_delay_ripple` 用變長遍歷 `-[:METRO_LINK|RAIL_LINK*1..N]-` 配合 `min(length(path))`，找出誤點站 N 跳之內受影響的所有車站。）
 
 ## 3.4 Node Identity
 
-<!-- station_id 作為 node identity 的理由 -->
+我們以 **`station_id`** 作為節點唯一識別，並對每種標籤建立 unique constraint：
+
+```cypher
+CREATE CONSTRAINT FOR (s:MetroStation)        REQUIRE s.station_id IS UNIQUE;
+CREATE CONSTRAINT FOR (s:NationalRailStation) REQUIRE s.station_id IS UNIQUE;
+```
+
+選擇 `station_id`（如 `MS01`、`NR01`）的理由：(1) **來自來源資料的穩定外部鍵**，直接取自 mock data JSON，不需另造代理鍵；(2) **跨兩網全域唯一**，捷運 `MS` 前綴、國鐵 `NR` 前綴命名空間不重疊，混在跨網查詢也不撞號；(3) **與 PostgreSQL 1:1 對應，跨庫查詢免轉換**——Neo4j 的 `station_id` 與關聯式 `station_id` 完全相同，應用層拿到圖形回傳的 `station_id` 可直接到 PostgreSQL 查明細，兩庫間不需任何 ID 對照；(4) **人類可讀**，便於除錯與在 Neo4j Browser 手動驗證。unique constraint 附帶建立索引，使 `MATCH (s {station_id: ...})` 的起點定位是索引查找而非掃描。
 
 ---
 
