@@ -50,10 +50,10 @@
 
 | Member | Estimated % | Brief justification |
 |--------|-----------|---------------------|
-| 蔡晟郁 | 40% | Full relational schema (Task 1) + all 15 relational query functions (Task 2) + schema/query bug fixes + Design Document Sec 1, 2, 5, 6 |
-| 黃謙儒 | 35% | Full Neo4j graph design + seeding (Task 4) + all 6 graph query functions including 3 bug fixes (Task 5) + PostgreSQL seeding lead (Task 3) |
-| 蔣耀德 | 25% | Full RAG/vector pipeline (`rag.py`, `reranker.py`, `llm_provider.py`, `seed_vectors.py`) + agent.py LLM pipeline integration + Design Document Sec 4 |
-| **Total** | **100%** | |
+| 蔡晟郁 | 33% | Task 1 relational schema, all Task 2 query functions, Design Document Sec 1/2/5/6 |
+| 黃謙儒 | 33% | Task 3 PG seeding (junction tables), Task 4 Neo4j graph design & seeding, Task 5 all graph query functions, Design Document Sec 3 |
+| 蔣耀德 | 33% | Vector/RAG pipeline (seed_vectors, rag.py, reranker.py), agent.py integration, Design Document Sec 4 |
+| **Total** | **99%** | |
 
 ---
 
