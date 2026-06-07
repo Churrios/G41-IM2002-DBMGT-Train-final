@@ -1,6 +1,6 @@
 # Post-Sync Review — TransitFlow 整合檢查
 
-> 更新：2026-06-06 | 範圍：所有個人代辦完成後，三人共同下一步
+> 更新：2026-06-07 | 範圍：PR #35 #36 #38 #39 全部合併完畢
 
 ---
 
@@ -60,8 +60,8 @@
 | ✅ | `query_interchange_path`：C4 已修（`shortestPath(*1..10)`，PR #30） |
 | ✅ | `query_alternative_routes`：C3 已修（`WITH` + `RETURN DISTINCT` 去重，PR #30） |
 | 🟡 | **`query_delay_ripple` hops 無上限**：`safe_hops = max(0, int(hops))` → 改為 `max(1, min(int(hops), 10))` |
-| 🔴 | **`skeleton/seed_postgres.py`**：`seed_metro_schedules` / `seed_national_rail_schedules` 移除 `stops_in_order`，insert 到 junction table（詳見下方 Step B） |
-| 🔴 | **Design Document Section 3**：Graph Database Design Rationale（nodes/relationships 設計理由、Dijkstra vs SQL 論證、兩種查詢類型、node identity） |
+| ✅ | **`skeleton/seed_postgres.py`**：junction table insert 完成（PR #38） |
+| ✅ | **Design Document Section 3**：完整撰寫，含 Dijkstra 論證 + 兩種查詢 + node identity（PR #39） |
 | 🔴 | **`WORK_ALLOCATION.md`**：補上 Student ID、email、簽名（GitHub Churrios 已填） |
 | 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 
@@ -74,7 +74,7 @@
 | ✅ | `agent.py`：`search_policy` 接入 `rag.search_with_rerank` |
 | ✅ | `rag.py` / `reranker.py`：邏輯完整 |
 | ✅ | `agent.py` line 329–331：isinstance string check 已移除（PR #36） |
-| 🟡 | **Design Document Section 4**：已寫（PR 已開），但 4.1 缺「embed 對象是 policy documents」說明，需補一句 |
+| ✅ | **Design Document Section 4**：完整撰寫，含 4.1 policy documents 說明（PR #36） |
 | 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高，必要時調低至 0.3 |
 | 🟡 | **embedding 維度驗證（J2）**：seed 後實際跑 `query_policy_vector_search` 確認有回結果 |
 | 🔴 | **`skeleton/agent.py`：`query_station_connections` 未接入**：函式存在於 `databases/graph/queries.py:403` 但未 import、未加入 TOOLS list、未加入 TOOLS_SCHEMA、未加入 `_execute_tool` → C6 透過 chatbot 完全不可觸發。需補：1) import，2) tool 定義，3) TOOLS_SCHEMA，4) `_execute_tool` handler |
@@ -90,46 +90,25 @@
 | ✅ | 本機環境全套跑通（seed PG / vectors / Neo4j 均無 traceback） |
 | ✅ | Task 1 Normalisation：junction table 完成（PR #34） |
 | ✅ | 評分細則三份已完整閱讀 |
-| 🟡 | **Design Document**：蔡 Sec 1+2+5+6 ✅；黃 Sec 3 🔴；蔣 Sec 4 🟡 |
+| ✅ | **Design Document**：全部六節完成（蔡 Sec1+2+5+6，黃 Sec3，蔣 Sec4）|
 | 🟡 | **Work Allocation Report**：蔡已填；黃蔣需補 |
 | 🔴 | **Peer Review**：三人各自填，保密 |
 | ⭐ | **Unit Test（pytest）**：目前完全沒有，課堂筆記明確要求 |
 
 ---
 
-## 二、Step B — seed_postgres.py junction table（黃謙儒待做）
-
-蔡的 schema 已移除 `stops_in_order` 欄位，seed script 需同步。
-
-**`seed_metro_schedules`**：移除 `"stops_in_order"` 欄位，insert 完後加：
-```python
-stop_rows = []
-for s in data:
-    for i, station_id in enumerate(s.get("stops_in_order", [])):
-        stop_rows.append((s["schedule_id"], i, station_id))
-insert_many(cur, "metro_schedule_stops",
-            ["schedule_id", "stop_order", "station_id"], stop_rows)
-print(f"Seeded {len(stop_rows)} metro schedule stops.")
-```
-
-**`seed_national_rail_schedules`**：同上，改用 `national_rail_schedule_stops`。
-
-改完後執行 `python3 skeleton/seed_postgres.py` 確認無 traceback。
-
----
-
-## 三、繳交項目狀態
+## 二、繳交項目狀態
 
 | 項目 | 狀態 |
 |------|------|
 | Code Repository | ✅ |
-| Design Document | 🟡 蔡 Sec1+2+5+6 ✅；黃 Sec3 🔴；蔣 Sec4 🟡（需補 4.1） |
+| Design Document | ✅ 全部六節完成 |
 | Work Allocation Report | 🟡 蔡已填；黃缺 Student ID / email / 簽名；蔣全部空白 |
 | Peer Review Report | 🔴 三人均未填 |
 
 ---
 
-## 四、評分風險
+## 三、評分風險
 
 ### 靜態程式碼（/100）
 
@@ -141,7 +120,7 @@ print(f"Seeded {len(stop_rows)} metro schedule stops.")
 | Task 1 PK comment / soft delete comment | ✅ |
 | Task 1 Normalisation（junction table） | ✅ PR #34 |
 | Task 2 Query functions 15/15 | ✅ |
-| Task 3 Seeding | ✅（黃補 junction table insert 後） |
+| Task 3 Seeding | ✅ |
 | Task 4 Graph Design | ✅ |
 | Task 5 C1–C5 graph queries | ✅ |
 | Task 5 C6 `query_station_connections` | ⚠️ 函式正確但 agent 未接入 |
@@ -160,7 +139,7 @@ print(f"Seeded {len(stop_rows)} metro schedule stops.")
 
 ---
 
-## 五、已知不修（學校專題可接受）
+## 四、已知不修（學校專題可接受）
 
 - `execute_booking` race condition（無 `SELECT FOR UPDATE`）
 - 連線風格不統一（read-only 用 `_connect()`，write 用手動連線）
@@ -169,7 +148,7 @@ print(f"Seeded {len(stop_rows)} metro schedule stops.")
 
 ---
 
-## 六、本機環境設定
+## 五、本機環境設定
 
 | # | 步驟 | 狀態 |
 |---|------|------|
@@ -186,7 +165,7 @@ print(f"Seeded {len(stop_rows)} metro schedule stops.")
 
 ---
 
-## 七、Live Testing 注意事項
+## 六、Live Testing 注意事項
 
 **TA 有額外測試題，範例題只是基礎。**
 
@@ -194,7 +173,7 @@ print(f"Seeded {len(stop_rows)} metro schedule stops.")
 
 ---
 
-## 八、Task 6 Bonus 條件（+15 × 3 = +45）
+## 七、Task 6 Bonus 條件（+15 × 3 = +45）
 
 要拿任一 bonus，**全部四項**必須齊備：
 1. 改動 database code（schema / queries / seed）
