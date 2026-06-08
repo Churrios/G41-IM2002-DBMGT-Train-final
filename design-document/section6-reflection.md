@@ -4,13 +4,20 @@
 
 ## 6.1 Design Decisions
 
-### Decision 1：Schedule Stops as VARCHAR[] vs. Junction Table
+### Decision 1：Schedule Stops — Migrating from VARCHAR[] to Junction Table
 
-We chose to store schedule stop sequences as a PostgreSQL array column (`stops_in_order VARCHAR(10)[]`) rather than normalised junction tables (`metro_schedule_stops`, `national_rail_schedule_stops`). The trade-off is between development speed and strict 3NF compliance.
+We initially stored schedule stop sequences as a PostgreSQL array column (`stops_in_order VARCHAR(10)[]`). This matched the JSON seed data format directly and allowed stops to be queried with a single `array_position()` call, making early development fast.
 
-The array column allowed us to seed and query stops with a single table scan and to match our JSON seed data format directly. However, it violates 3NF: stop position is determined by array index rather than an independent key, which means stop-level data cannot be independently updated without rewriting the entire array. A junction table (`schedule_id`, `stop_order`, `station_id`) would satisfy 3NF and support row-level upserts, but required rewriting seed scripts and all queries that use `array_position()` or `@>` operators.
+However, the array design violates 3NF: stop position is encoded as an implicit array index rather than a declared attribute, so there is no candidate key that functionally determines stop position. This means individual stops cannot be updated without rewriting the entire array, and the functional dependency `(schedule_id, stop_order) → station_id` cannot be expressed relationally.
 
-Given that schedule data is read-only in this system (schedules are seeded once and not incrementally updated), the array approach is acceptable for the project scope. In a production transit system where operators add or reorder stops dynamically, a junction table is the correct design.
+We migrated to two junction tables in PR #34:
+
+```sql
+metro_schedule_stops          (schedule_id, stop_order, station_id)
+national_rail_schedule_stops  (schedule_id, stop_order, station_id)
+```
+
+With composite primary key `(schedule_id, stop_order)`, the functional dependency is properly expressed and 3NF is satisfied. The migration required rewriting all stop-related queries from `array_position()` / `@>` operators to JOIN-based lookups, and updating the seed scripts to insert into the junction tables. The extra development cost was accepted because 3NF compliance is a grading requirement and the junction table design is the correct choice for any system where stop sequences may need to be updated independently.
 
 ### Decision 2：Local LLM (llama3.2:1b) vs. Cloud LLM (Gemini)
 
