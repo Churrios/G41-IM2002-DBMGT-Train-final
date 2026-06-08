@@ -45,7 +45,7 @@
 | ✅ | Design Document Section 2：Normalisation Justification 完整撰寫 |
 | ✅ | Design Document Section 5+6：AI Usage + Reflection 完整 |
 | ✅ | `WORK_ALLOCATION.md`：蔡晟郁部分已填（Student ID / GitHub / email / 簽名） |
-| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
+| 🟡 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 
 ---
 
@@ -59,11 +59,11 @@
 | ✅ | `query_delay_ripple`：C5 已修（`MATCH path =` + `min(length(path))`） |
 | ✅ | `query_interchange_path`：C4 已修（`shortestPath(*1..10)`，PR #30） |
 | ✅ | `query_alternative_routes`：C3 已修（`WITH` + `RETURN DISTINCT` 去重，PR #30） |
-| 🟡 | **`query_delay_ripple` hops 無上限**：`safe_hops = max(0, int(hops))` → 改為 `max(1, min(int(hops), 10))` |
+| ✅ | **`query_delay_ripple` hops 上限**：`safe_hops = max(0, min(int(hops), 10))`（PR #45，floor=0 保留 hops=0 special case） |
 | ✅ | **`skeleton/seed_postgres.py`**：junction table insert 完成（PR #38） |
 | ✅ | **Design Document Section 3**：完整撰寫，含 Dijkstra 論證 + 兩種查詢 + node identity（PR #39） |
-| 🔴 | **`WORK_ALLOCATION.md`**：補上 Student ID、email、簽名（GitHub Churrios 已填） |
-| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
+| 🟡 | **`WORK_ALLOCATION.md`**：補上 Student ID、email、簽名（GitHub Churrios 已填） |
+| 🟡 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 
 ---
 
@@ -75,11 +75,11 @@
 | ✅ | `rag.py` / `reranker.py`：邏輯完整 |
 | ✅ | `agent.py` line 329–331：isinstance string check 已移除（PR #36） |
 | ✅ | **Design Document Section 4**：完整撰寫，含 4.1 policy documents 說明（PR #36） |
-| 🟡 | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5` 可能過高，必要時調低至 0.3 |
-| 🟡 | **embedding 維度驗證（J2）**：seed 後實際跑 `query_policy_vector_search` 確認有回結果 |
-| 🔴 | **`skeleton/agent.py`：`query_station_connections` 未接入**：函式存在於 `databases/graph/queries.py:403` 但未 import、未加入 TOOLS list、未加入 TOOLS_SCHEMA、未加入 `_execute_tool` → C6 透過 chatbot 完全不可觸發。需補：1) import，2) tool 定義，3) TOOLS_SCHEMA，4) `_execute_tool` handler |
-| 🔴 | **`WORK_ALLOCATION.md`**：補上 Student ID、GitHub username、email、簽名（全部空白） |
-| 🔴 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
+| ✅ | `config.py` `VECTOR_SIMILARITY_THRESHOLD=0.5`：測試後確認適當（Section 5 Example 4 記錄決策過程） |
+| ✅ | **embedding 維度驗證（J2）**：本機 seed 全套跑通，pgvector Section A ✅ |
+| ✅ | **`skeleton/agent.py`：`get_station_connections` 已接入**（PR #40，import + TOOLS + TOOLS_SCHEMA + `_execute_tool` handler 全部補齊） |
+| 🟡 | **`WORK_ALLOCATION.md`**：補上 Student ID、GitHub username、email、簽名（全部空白） |
+| 🟡 | **Peer Review**：填寫 `PEER_REVIEW_TEMPLATE.md`（保密，各自填） |
 
 ---
 
@@ -92,7 +92,7 @@
 | ✅ | 評分細則三份已完整閱讀 |
 | ✅ | **Design Document**：全部六節完成（蔡 Sec1+2+5+6，黃 Sec3，蔣 Sec4）|
 | 🟡 | **Work Allocation Report**：蔡已填；黃蔣需補 |
-| 🔴 | **Peer Review**：三人各自填，保密 |
+| 🟡 | **Peer Review**：三人各自填，保密 |
 | ⭐ | **Unit Test（pytest）**：目前完全沒有，課堂筆記明確要求 |
 
 ---
@@ -104,7 +104,7 @@
 | Code Repository | ✅ |
 | Design Document | ✅ 全部六節完成 |
 | Work Allocation Report | 🟡 蔡已填；黃缺 Student ID / email / 簽名；蔣全部空白 |
-| Peer Review Report | 🔴 三人均未填 |
+| Peer Review Report | 🟡 各自填寫中 |
 
 ---
 
@@ -123,7 +123,7 @@
 | Task 3 Seeding | ✅ |
 | Task 4 Graph Design | ✅ |
 | Task 5 C1–C5 graph queries | ✅ |
-| Task 5 C6 `query_station_connections` | ⚠️ 函式正確但 agent 未接入 |
+| Task 5 C6 `query_station_connections` | ✅ PR #40 |
 | Code Quality（WHY comments / docstring） | ✅ |
 
 ### Live Testing（/100）
@@ -135,7 +135,7 @@
 | Section C C1/C2/C5 | /15 | ✅ |
 | Section C C3 duplicate routes | /7 | ✅ PR #30 |
 | Section C C4 interchange path | /8 | ✅ PR #30 |
-| Section C C6 station connections | /5 | 🔴 chatbot 不可觸發（蔣需補 agent.py） |
+| Section C C6 station connections | /5 | ✅ PR #40 |
 
 ---
 
@@ -182,3 +182,73 @@
 4. repo root 建立 `TASK6.md`，且每個改動檔案頭有 `# TASK 6 EXTENSION:` comment
 
 > 缺少 `TASK6.md` → bonus 不計分
+
+---
+
+## 八、Task 6 實作計劃 — Delay Event Logging
+
+功能：新增誤點事件記錄系統，與現有 `query_delay_ripple`（C5）自然串接。
+
+### 🔵 蔡晟郁（PostgreSQL）
+
+| 狀態 | 項目 |
+|------|------|
+| 🔴 | `schema.sql`：新增 `delay_events` 表（event_id, station_id, reported_at, severity, description, resolved_at）+ FK + ON DELETE + `# TASK 6 EXTENSION:` comment |
+| 🔴 | `relational/queries.py`：實作 `log_delay_event()`、`get_active_delays()`、`resolve_delay()` + WHY comment + `# TASK 6 EXTENSION:` comment |
+| 🔴 | `seed_postgres.py`：seed 3–5 筆 delay_events 範例資料（含不同 severity）+ `# TASK 6 EXTENSION:` comment |
+
+### 🟢 黃謙儒（Agent 接入 + 測試）
+
+| 狀態 | 項目 |
+|------|------|
+| 🔴 | `agent.py`：新增 `report_delay` / `get_active_delays` 兩個 tool（TOOLS list + TOOLS_SCHEMA + `_execute_tool` handler）+ `# TASK 6 EXTENSION:` comment |
+| 🔴 | 實際測試：Docker → seed → chatbot 呼叫兩個 tool → 截圖留存 |
+
+### 🟣 蔣耀德（文件）
+
+| 狀態 | 項目 |
+|------|------|
+| 🔴 | repo root 建立 `TASK6.md`（列出所有改動檔案、函式名、表格名） |
+| 🔴 | `design-document.md` 新增 Section 7（motivation、schema snippet、example queries + 預期輸出、testing evidence 截圖） |
+
+### 👥 三人共同
+
+| 狀態 | 項目 |
+|------|------|
+| 🔴 | 開 PR、merge、確認 B1–C6 原有測試無 regression |
+
+---
+
+## 九、Bonus 白話說明
+
+我們要做的 bonus 功能是「**誤點事件記錄（Delay Event Logging）**」。
+
+簡單說，就是讓使用者透過 chatbot 回報某個車站誤點，並查詢目前哪些車站有活躍的誤點事件。這個功能直接連結到現有的誤點漣漪分析（C5），讓系統更完整。
+
+### 三個人要做的事
+
+**蔡晟郁**（做資料庫）
+- 在 `schema.sql` 新增一張 `delay_events` 資料表，記錄誤點車站、時間、嚴重程度、描述、解除時間
+- 在 `relational/queries.py` 寫三個函式：記錄一筆誤點、查詢目前活躍誤點、解除誤點
+- 在 `seed_postgres.py` 塞幾筆假資料進去（不同嚴重程度），讓測試時有東西可以查
+- 以上每個改動的檔案頭都要加一行 `# TASK 6 EXTENSION:` 的 comment
+
+**黃謙儒**（接入 chatbot）
+- 在 `agent.py` 新增兩個 tool：`report_delay`（回報誤點）和 `get_active_delays`（查詢誤點），讓 LLM 能透過 chatbot 呼叫這兩個功能
+- 啟動 Docker、跑 seed、實際在 chatbot 輸入問題測試這兩個 tool，**截圖存下來**（Section 7 需要用）
+- `agent.py` 頭也要加 `# TASK 6 EXTENSION:` comment
+
+**蔣耀德**（寫文件）
+- 在 repo 根目錄建立 `TASK6.md`，列出所有改動的檔案名稱、新增的函式名、新增的表格名
+- 在 `design-document.md` 最後加一節 Section 7，要包含：
+  - 為什麼做這個功能（motivation）
+  - 新增的資料表結構（貼 SQL snippet）
+  - 範例查詢 + 預期輸出（貼 SQL/Python + 結果）
+  - 測試截圖（用黃的截圖）
+
+### 關鍵注意事項
+
+- `TASK6.md` **一定要建立**，缺少它的話 Code 和 Live Testing 的 bonus 直接 0 分，只剩 Design Document 可以拿
+- 每個改動的檔案頭都要有 `# TASK 6 EXTENSION:` comment，TA 用這個定位所有 bonus 程式碼
+- Section 7 四個部分都要有：motivation、schema、example query + output、截圖，缺一扣分
+- 做完之後確認原本 B1–C6 所有功能還是正常（新功能不能破壞舊功能）
