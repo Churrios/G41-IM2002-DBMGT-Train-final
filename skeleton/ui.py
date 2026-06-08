@@ -5,6 +5,10 @@ Run with:  python skeleton/ui.py
 Then open: http://localhost:7860
 
 Students: You do NOT need to change this file.
+
+跨檔案互動：
+  - 呼叫 skeleton/agent.py → 取得核心 LLM 邏輯與工具呼叫
+  - 啟動 Gradio server 作為介面
 """
 
 import sys

@@ -10,6 +10,10 @@ If you switch providers, you must re-run skeleton/seed_vectors.py to rebuild
 the pgvector index with the new embedding model.
 
 Students: You do NOT need to change this file.
+
+跨檔案互動：
+  - 被 skeleton/agent.py 等多個模組呼叫 → 提供 LLM 服務
+  - 依賴 skeleton/config.py → OLLAMA_BASE_URL / GEMINI_API_KEY (或 OPENAI_API_KEY)
 """
 
 from __future__ import annotations

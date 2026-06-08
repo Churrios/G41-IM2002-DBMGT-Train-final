@@ -25,6 +25,13 @@ Your goal is to make the database queries richer by:
   3. Adding more policy documents (databases/vector/documents.py)
 
 The agent will automatically use whatever you put in the databases.
+
+跨檔案互動：
+  - 呼叫 databases/relational/queries.py → 關聯式資料與向量資料庫查詢（可用性、票價、預訂等）
+  - 呼叫 databases/graph/queries.py → 圖形資料庫查詢（路徑尋找、替代路線、延遲影響等）
+  - 呼叫 skeleton/rag.py → search_with_rerank()
+  - 呼叫 skeleton/llm_provider.py → LLM 介面
+  - 被 skeleton/ui.py 呼叫 → run_agent() 處理對話
 """
 
 from __future__ import annotations

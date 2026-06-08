@@ -15,6 +15,10 @@ Schema:
   Nodes:  MetroStation, NationalRailStation
   Edges:  METRO_LINK (fare_usd), RAIL_LINK (fare_standard_usd / fare_first_usd),
           INTERCHANGE_TO (transfer_time_min=5)
+
+跨檔案互動：
+  - 被 skeleton/agent.py 呼叫 → 執行最短路徑、最便宜路徑、替代路線與延遲影響等圖形查詢
+  - 依賴 skeleton/config.py → 讀取 NEO4J_URI、NEO4J_USER、NEO4J_PASSWORD 連線設定
 """
 
 from __future__ import annotations
