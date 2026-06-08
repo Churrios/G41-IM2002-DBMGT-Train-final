@@ -5,7 +5,7 @@
 
 ---
 
-# Section 1 — 實體關係圖
+# Section 1 — Entity-Relationship Diagram
 
 > 負責人：蔡晟郁
 
@@ -35,7 +35,7 @@
 
 ---
 
-# Section 2 — 正規化說明
+# Section 2 — Normalisation Justification
 
 > 負責人：蔡晟郁
 
@@ -111,7 +111,7 @@ $2b$12$<22字元salt><31字元hash>
 
 ---
 
-# Section 3 — 圖形資料庫設計理由
+# Section 3 — Graph Database Design Rationale
 
 > 負責人：黃謙儒
 
@@ -219,7 +219,7 @@ CREATE CONSTRAINT FOR (s:NationalRailStation) REQUIRE s.station_id IS UNIQUE;
 
 ---
 
-# Section 5 — AI 工具使用紀錄
+# Section 5 — AI Tool Usage Evidence
 
 > 負責人：三人共同
 
@@ -290,7 +290,7 @@ AI 建議整份文件 embed：(1) 政策文件是獨立完整的單元——切 
 
 ---
 
-# Section 6 — 設計反思與取捨
+# Section 6 — Reflection & Trade-offs
 
 > 負責人：三人共同
 
