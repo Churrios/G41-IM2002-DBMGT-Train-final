@@ -352,8 +352,11 @@ def query_delay_ripple(delayed_station_id: str, hops: int = 2) -> list[dict]:
         List of dicts: {station_id, name, hops_away, lines_affected}
     """
     try:
-        # int() + f-string: Cypher does not accept $param for variable-length upper bound
-        safe_hops = max(0, int(hops))
+        # int() + f-string: Cypher does not accept $param for variable-length upper bound.
+        # Cap at 10 (matches the *1..10 bound used in interchange/alternative queries) to
+        # stop an LLM-supplied hops=99 from triggering a full-graph traversal + timeout.
+        # Floor stays 0 so the hops=0 special-case (return only the start station) fires.
+        safe_hops = max(0, min(int(hops), 10))
         with _driver() as driver:
             with driver.session() as session:
                 start_record = session.run(
