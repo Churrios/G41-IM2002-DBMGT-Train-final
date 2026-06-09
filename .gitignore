@@ -55,6 +55,9 @@ gradio_cached_examples/
 .idea/
 *.iml
 
+# Peer review — confidential, submit via EEClass only
+PEER_REVIEW_*.md
+
 # OS
 .DS_Store
 Thumbs.db
