@@ -58,6 +58,7 @@
 - **Gemini tool：** `search_policy(...)`（兩 provider 都選這個）→ 撞 sentence_transformers 未裝
 - **root cause：** `query_payment_info` 存在於 [queries.py:360](databases/relational/queries.py#L360) 且正確，但 **agent.py 工具清單完全沒有 payment 工具**（`grep payment skeleton/agent.py` 無結果）→ LLM 無從選取，只能 fallback 到 search_policy。
 - **判定：** Tool 🔴（無此工具可選）/ Function ✅（蔡直接呼叫：BK001 $8.50 paid；未知 ID 回 None）。**透過助理永遠到不了。**
+- **後續（已修）：** 蔣已將 `query_payment_info` 註冊成 agent 工具（README 明列此為 `skeleton/agent.py` 允許的擴充）。待恢復測試後在 UI 重驗，並確認比照個人資料要求登入。
 
 ### B9 `execute_booking`（工具名 `make_booking`）✅ 通過
 - **問題：** `Book seat B04 in standard class on schedule NR_SCH01 from NR01 to NR05 on 2026-06-20`
@@ -190,8 +191,8 @@
 |---|------|------|---------|:---:|---------|
 | 1 | `query_metro_fare`（B4）**與** `query_national_rail_fare`（B3）未轉型 → `stops_travelled` 為字串時 string×float crash（**兩支均直接呼叫確認**）| [queries.py:225](databases/relational/queries.py#L225) / [:164](databases/relational/queries.py#L164) | relational（蔡）| 🔴 高 | `stops = int(stops_travelled)` 後再運算 |
 | 2 | `execute_cancellation` open() 漏 `encoding='utf-8'` → Windows cp950 crash | [queries.py:536](databases/relational/queries.py#L536) | relational（蔡）| 🔴 高（Windows）| `open(_POLICY_PATH, encoding='utf-8')` |
-| 3 | `query_payment_info` 未註冊成 agent 工具 → 助理無法觸及 | skeleton/agent.py（無 payment 工具）| agent（蔣）| 🟠 中 | 在工具清單註冊 payment 工具 + dispatch 分支 |
-| 4 | agent.py fallback 規則 #1 覆蓋正確的 `find_alternative_routes`（C3）；規則 #3 "show my" 搶走 profile（B6）| [agent.py:686](skeleton/agent.py#L686), :708 | agent（蔣）| 🟠 中 | guard 加：已正確選到對應工具 / 問句含 alternative·avoid·closed 時不觸發 |
+| 3 | `query_payment_info` 未註冊成 agent 工具 → 助理無法觸及 ｜ **✅ 蔣已註冊修復**（README「Your Tasks」明列 `skeleton/agent.py` 可「Register new query functions as tools」，屬官方允許的純加法擴充；待恢復測試後 UI 重驗，並確認比照 booking/profile 要求登入）| skeleton/agent.py | agent（蔣）| ✅ 已修 | 在工具清單註冊 payment 工具 + dispatch 分支 |
+| 4 | agent.py fallback 規則 #1 覆蓋正確的 `find_alternative_routes`（C3）；規則 #3 "show my" 搶走 profile（B6）｜ **團隊決議：保留為已知限制、不改**（改 fallback 屬「除非知道自己在做什麼否則勿動」的 skeleton 核心邏輯；此 fallback 是預設 Ollama 的 tool-use 兜底安全網，動它有回歸風險；底層函式皆正確、僅 UI 次佳，TA 直接呼叫不受影響）| [agent.py:686](skeleton/agent.py#L686), :708 | agent（蔣）| 🟠 中（暫不修）| 若要修：只加 narrow guard（已正確選到對應工具就不觸發），並於 Ollama+Gemini 雙 provider 重測；偏 Task 6 等級 |
 | 5 | `requirements.txt` 漏 `sentence-transformers` → RAG（search_policy）全炸（**裝 5.5.1 後兩題 RAG 皆通過**，確認僅缺宣告）| [reranker.py:19](skeleton/reranker.py#L19) 頂層 import | vector（蔣）| 🟠 中 | 補進 requirements；或 import 失敗時優雅降級回向量相似度 |
 | 6 | pgvector HNSW 索引上限 2000 維，與 Gemini 3072 維衝突 | [schema.sql](databases/relational/schema.sql) | relational（蔡）| 🟡 低 | 3072 時不建 HNSW（已註解），或改 `halfvec(3072)` cast 索引 |
 | 7 | `query_station_connections` 回裸 list 無原點標記，LLM 易誤讀（C6）| [graph/queries.py](databases/graph/queries.py) | graph（Chien）| 🟡 低（優化）| 包成 `{"station_id":..., "connections":[...]}` |
