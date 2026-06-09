@@ -278,7 +278,8 @@ CREATE TABLE feedback (
 
 CREATE TABLE delay_events (
     event_id      SERIAL        PRIMARY KEY,
-    -- RESTRICT: do not allow station deletion while active events exist
+    -- No FK: station_id may reference metro_stations or national_rail_stations;
+    -- referential integrity is enforced at the application layer.
     station_id    VARCHAR(10)   NOT NULL,
     reported_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     severity      VARCHAR(10)   NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
