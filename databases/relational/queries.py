@@ -155,7 +155,7 @@ def query_national_rail_fare(
         "fare_class": fare_class,
         "base_fare_usd": base,
         "per_stop_rate_usd": per_stop,
-        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+        "total_fare_usd": round(base + per_stop * int(stops_travelled), 2),
     }
 
 
@@ -216,7 +216,7 @@ def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
     return {
         "base_fare_usd": base,
         "per_stop_rate_usd": per_stop,
-        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+        "total_fare_usd": round(base + per_stop * int(stops_travelled), 2),
     }
 
 
@@ -527,7 +527,7 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
     """
     # Read policy file before opening the DB connection — file I/O inside a
     # transaction holds the connection open unnecessarily and risks timeouts.
-    with open(_POLICY_PATH) as f:
+    with open(_POLICY_PATH, encoding="utf-8") as f:
         policies = json.load(f)
     conn = psycopg2.connect(PG_DSN)
     conn.autocommit = False
