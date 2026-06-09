@@ -440,6 +440,8 @@ def seed_delay_events(cur):
     Covers all three severity levels and both network types (metro + national rail).
     One event is pre-resolved to demonstrate the resolved_at column.
     """
+    # event_id is SERIAL so ON CONFLICT DO NOTHING cannot deduplicate; DELETE first to stay idempotent.
+    cur.execute("DELETE FROM delay_events")
     rows = [
         # (station_id, reported_at, severity, description, resolved_at)
         ("MS03", "2025-03-10 08:15:00+00", "high",   "Signal failure causing full service suspension on the Central Line.", None),

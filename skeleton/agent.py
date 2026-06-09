@@ -55,6 +55,8 @@ from databases.relational.queries import (
     execute_booking,
     execute_cancellation,
     query_policy_vector_search,
+    log_delay_event,
+    get_active_delays,
 )
 from databases.graph.queries import (
     query_shortest_route,
@@ -300,6 +302,32 @@ TOOLS = [
         },
         "required": ["station_id"],
     },
+    # ── TASK 6 EXTENSION: Delay Event Logging ────────────────────────────────
+    {
+        "name": "report_delay",
+        "description": (
+            "Report a new delay or disruption at a station. "
+            "Use when a user says there is a delay, signal failure, fault, or disruption at a station."
+        ),
+        "parameters": {
+            "station_id":  {"type": "string", "description": "Station ID e.g. MS07 or NR03"},
+            "severity":    {"type": "string", "description": "One of: low, medium, high"},
+            "description": {"type": "string", "description": "Brief description of the disruption"},
+        },
+        "required": ["station_id", "severity", "description"],
+    },
+    {
+        "name": "get_active_delays",
+        "description": (
+            "Get all currently active (unresolved) delays and disruptions. "
+            "Optionally filter to a specific station. "
+            "Use when a user asks 'are there any delays', 'what disruptions are active', or similar."
+        ),
+        "parameters": {
+            "station_id": {"type": "string", "description": "Station ID to filter by (optional)"},
+        },
+        "required": [],
+    },
 ]
 
 TOOLS_SCHEMA = """\
@@ -316,7 +344,9 @@ get_user_bookings()
 search_policy(query)
 find_alternative_routes(origin_id, destination_id, avoid_station_id, network?)
 get_delay_ripple(station_id, hops?)
-get_station_connections(station_id)"""
+get_station_connections(station_id)
+report_delay(station_id, severity, description)
+get_active_delays(station_id?)"""
 
 
 # ── Agent logic ───────────────────────────────────────────────────────────────
@@ -470,6 +500,20 @@ def _execute_tool(
         elif tool_name == "get_station_connections":
             result = query_station_connections(
                 station_id=params["station_id"],
+            )
+
+        # ── TASK 6 EXTENSION ─────────────────────────────────────────────────
+        elif tool_name == "report_delay":
+            event_id = log_delay_event(
+                station_id=params["station_id"],
+                severity=params["severity"],
+                description=params["description"],
+            )
+            result = {"event_id": event_id, "status": "recorded"}
+
+        elif tool_name == "get_active_delays":
+            result = get_active_delays(
+                station_id=params.get("station_id"),
             )
 
         else:
