@@ -51,6 +51,7 @@ from databases.relational.queries import (
     auto_select_adjacent_seats,
     query_user_profile,
     query_user_bookings,
+    query_payment_info,
     execute_booking,
     execute_cancellation,
     query_policy_vector_search,
@@ -180,6 +181,17 @@ TOOLS = [
         "required": ["origin_id", "destination_id"],
     },
     {
+        "name": "get_payment_info",
+        "description": (
+            "Retrieve payment information for a specific booking ID. "
+            "Use this when a user asks about payment status, amount, or method for a booking."
+        ),
+        "parameters": {
+            "booking_id": {"type": "string", "description": "The booking reference ID e.g. BK-A1B2C3"},
+        },
+        "required": ["booking_id"],
+    },
+    {
         "name": "get_user_bookings",
         "description": (
             "Retrieve the logged-in user's full booking history (national rail bookings + metro trips). "
@@ -299,6 +311,7 @@ calculate_metro_fare(schedule_id, stops_travelled)
 get_available_seats(schedule_id, travel_date, fare_class)
 make_booking(schedule_id, origin_station_id, destination_station_id, travel_date, fare_class, seat_id, ticket_type?)
 cancel_booking(booking_id)
+get_payment_info(booking_id)
 get_user_bookings()
 search_policy(query)
 find_alternative_routes(origin_id, destination_id, avoid_station_id, network?)
@@ -356,6 +369,9 @@ def _execute_tool(
                     "stops":        n_stops,
                     **(fare or {"error": "Fare lookup failed"}),
                 }
+
+        elif tool_name == "get_payment_info":
+            result = query_payment_info(booking_id=params["booking_id"])
 
         elif tool_name == "get_user_bookings":
             if not current_user_email:
@@ -683,7 +699,9 @@ JSON:"""
         any(kw in _lower for kw in _route_triggers) or
         (_two_stations and "route" in _lower)
     )
-    if _is_route and _two_stations and not _tool_selected("find_route", "origin_id", "destination_id"):
+    if _is_route and _two_stations \
+            and not _tool_selected("find_route", "origin_id", "destination_id") \
+            and not _tool_selected("find_alternative_routes", "origin_id", "destination_id"):
         _opt = "cost" if any(kw in _lower for kw in ["cheap", "cheapest", "lowest cost"]) else "time"
         _fallback("find_route",
                   {"origin_id": _station_ids[0].upper(), "destination_id": _station_ids[1].upper(), "optimise_by": _opt},
