@@ -268,6 +268,30 @@ CREATE TABLE feedback (
 
 
 -- ============================================================
+--  TASK 6 EXTENSION: DELAY EVENT LOGGING
+-- ============================================================
+-- New table tracking real-time disruption events at stations.
+-- station_id is a logical reference to either metro_stations or
+-- national_rail_stations; PostgreSQL does not support a single FK
+-- across two parent tables, so referential integrity is enforced
+-- at the application layer.
+
+CREATE TABLE delay_events (
+    event_id      SERIAL        PRIMARY KEY,
+    -- RESTRICT: do not allow station deletion while active events exist
+    station_id    VARCHAR(10)   NOT NULL,
+    reported_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    severity      VARCHAR(10)   NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
+    description   TEXT          NOT NULL,
+    -- NULL means the delay is still active; set by resolve_delay()
+    resolved_at   TIMESTAMPTZ
+);
+
+-- Index for fast active-delay lookups (resolved_at IS NULL filter)
+CREATE INDEX idx_delay_events_active ON delay_events(station_id) WHERE resolved_at IS NULL;
+
+
+-- ============================================================
 --  VECTOR SCHEMA  (RAG / Help Desk) — do not modify
 -- ============================================================
 
