@@ -38,7 +38,8 @@
 -- ============================================================
 
 CREATE TABLE registered_users (
-    -- PK: VARCHAR(10) matches mock data format (e.g. RU001, RUA1B2C3)
+    -- PK: VARCHAR(10) over SERIAL/UUID — IDs must match JSON mock data keys (e.g. RU001);
+    -- SERIAL would require remapping every seed reference; UUID adds no benefit at this scale.
     user_id          VARCHAR(10)   PRIMARY KEY,
     full_name        TEXT          NOT NULL,
     email            VARCHAR(200)  NOT NULL UNIQUE,
@@ -65,7 +66,8 @@ CREATE TABLE registered_users (
 -- ============================================================
 
 CREATE TABLE metro_stations (
-    -- PK: VARCHAR(10) matches mock data format (e.g. MS01)
+    -- PK: VARCHAR(10) over SERIAL/UUID — station IDs are domain identifiers (e.g. MS01) used
+    -- as FK targets across schedules, stops, and bookings; SERIAL would break all seed references.
     station_id                   VARCHAR(10)   PRIMARY KEY,
     name                         TEXT          NOT NULL,
     lines                        VARCHAR(10)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(10)[],
@@ -79,7 +81,8 @@ CREATE TABLE metro_stations (
 CREATE INDEX idx_metro_stations_lines ON metro_stations USING GIN (lines);
 
 CREATE TABLE national_rail_stations (
-    -- PK: VARCHAR(10) matches mock data format (e.g. NR01)
+    -- PK: VARCHAR(10) over SERIAL/UUID — same rationale as metro_stations; NR station IDs
+    -- (e.g. NR01) are referenced by schedules, stops, and graph nodes in Neo4j.
     station_id                   VARCHAR(10)   PRIMARY KEY,
     name                         TEXT          NOT NULL,
     lines                        VARCHAR(10)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(10)[],
@@ -107,7 +110,8 @@ ALTER TABLE metro_stations
 -- ============================================================
 
 CREATE TABLE metro_schedules (
-    -- PK: VARCHAR(20) for longer schedule IDs (e.g. MS_SCH01)
+    -- PK: VARCHAR(20) over SERIAL/UUID — schedule IDs (e.g. MS_SCH01) are mock data keys
+    -- referenced by stops, bookings, and travel history; SERIAL would break all seed references.
     schedule_id              VARCHAR(20)   PRIMARY KEY,
     line                     VARCHAR(5)    NOT NULL,
     direction                VARCHAR(15)   NOT NULL,
@@ -123,7 +127,8 @@ CREATE TABLE metro_schedules (
 );
 
 CREATE TABLE national_rail_schedules (
-    -- PK: VARCHAR(20) for longer schedule IDs (e.g. NR_SCH01)
+    -- PK: VARCHAR(20) over SERIAL/UUID — same rationale as metro_schedules; NR schedule IDs
+    -- (e.g. NR_SCH01) are mock data keys used across stops, seat_layouts, and bookings.
     schedule_id               VARCHAR(20)   PRIMARY KEY,
     line                      VARCHAR(10)   NOT NULL,
     service_type              VARCHAR(10)   NOT NULL CHECK (service_type IN ('normal', 'express')),
@@ -180,7 +185,8 @@ CREATE TABLE seat_layouts (
 -- ============================================================
 
 CREATE TABLE bookings (
-    -- PK: VARCHAR(20) for generated IDs (e.g. BK-A1B2C3)
+    -- PK: VARCHAR(20) over SERIAL/UUID — application-generated prefixed IDs (e.g. BK-A1B2C3)
+    -- encode record type, aiding debugging without table lookups; UUID adds no benefit here.
     booking_id              VARCHAR(20)   PRIMARY KEY,
     user_id                 VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id) ON DELETE RESTRICT,
     schedule_id             VARCHAR(20)   NOT NULL REFERENCES national_rail_schedules(schedule_id) ON DELETE RESTRICT,
@@ -201,7 +207,8 @@ CREATE TABLE bookings (
 );
 
 CREATE TABLE metro_travel_history (
-    -- PK: VARCHAR(20) for generated IDs (e.g. MT-A1B2C3)
+    -- PK: VARCHAR(20) over SERIAL/UUID — same rationale as bookings; MT- prefix distinguishes
+    -- metro trips from rail bookings (BK-) when both appear in payments and feedback tables.
     trip_id                 VARCHAR(20)   PRIMARY KEY,
     user_id                 VARCHAR(10)   NOT NULL REFERENCES registered_users(user_id) ON DELETE RESTRICT,
     schedule_id             VARCHAR(20)   NOT NULL REFERENCES metro_schedules(schedule_id) ON DELETE RESTRICT,
@@ -235,7 +242,8 @@ CREATE INDEX idx_bookings_user_id ON bookings(user_id);
 -- ============================================================
 
 CREATE TABLE payments (
-    -- PK: VARCHAR(20) for generated IDs (e.g. PM-A1B2C3)
+    -- PK: VARCHAR(20) over SERIAL/UUID — PM- prefix makes payment IDs immediately identifiable
+    -- in logs and API responses without querying the table name.
     payment_id   VARCHAR(20)   PRIMARY KEY,
     booking_id   VARCHAR(20)   NOT NULL,
     -- amount_usd may be negative for refunds (money back to customer)
@@ -255,7 +263,8 @@ CREATE INDEX idx_payments_booking_id ON payments(booking_id);
 -- ============================================================
 
 CREATE TABLE feedback (
-    -- PK: VARCHAR(20) for generated IDs (e.g. FB-A1B2C3)
+    -- PK: VARCHAR(20) over SERIAL/UUID — FB- prefix identifies feedback records across
+    -- shared booking_id references (which span both bookings and metro_travel_history).
     feedback_id   VARCHAR(20)   PRIMARY KEY,
     booking_id    VARCHAR(20)   NOT NULL,
     -- SET NULL: feedback records are preserved anonymously if a user is deleted
