@@ -119,6 +119,15 @@ def build_documents():
 
 
 def seed():
+    # 清空舊向量資料，確保重複執行不產生重複記錄
+    from skeleton.config import PG_DSN
+    import psycopg2 as _pg
+    with _pg.connect(PG_DSN) as _conn:
+        with _conn.cursor() as _cur:
+            _cur.execute("DELETE FROM policy_documents")
+        _conn.commit()
+    print("🗑️  Cleared existing policy documents.")
+
     documents = build_documents()
     print(f"📄 Embedding {len(documents)} policy documents using {llm.chat_provider}...\n")
 
