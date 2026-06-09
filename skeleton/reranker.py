@@ -47,7 +47,7 @@ def rerank(query_text: str, results: list[dict], top_k: int = 5) -> list[dict]:
     """
     if not results:
         return []
-        
+
     if not HAS_SENTENCE_TRANSFORMERS:
         # 優雅降級：直接回傳初步結果的前 top_k 筆
         return results[:top_k]
