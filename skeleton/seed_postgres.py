@@ -433,6 +433,26 @@ def seed_feedback(cur):
     print(f"Seeded {inserted} feedback records.")
 
 
+# TASK 6 EXTENSION: seed sample delay events
+def seed_delay_events(cur):
+    """
+    Seed delay_events with representative disruption scenarios.
+    Covers all three severity levels and both network types (metro + national rail).
+    One event is pre-resolved to demonstrate the resolved_at column.
+    """
+    rows = [
+        # (station_id, reported_at, severity, description, resolved_at)
+        ("MS03", "2025-03-10 08:15:00+00", "high",   "Signal failure causing full service suspension on the Central Line.", None),
+        ("NR02", "2025-03-10 09:30:00+00", "medium", "Overhead line fault reducing services to single-track operation.", None),
+        ("MS07", "2025-03-10 11:00:00+00", "low",    "Minor platform overcrowding due to event at adjacent venue.", None),
+        ("NR04", "2025-03-09 14:20:00+00", "high",   "Track obstruction: emergency engineering works, no services.", "2025-03-09 18:45:00+00"),
+        ("MS01", "2025-03-10 07:50:00+00", "medium", "Escalator fault; passengers advised to use alternative exit.", None),
+    ]
+    columns = ["station_id", "reported_at", "severity", "description", "resolved_at"]
+    inserted = insert_many(cur, "delay_events", columns, rows)
+    print(f"Seeded {inserted} delay event records.")
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -456,6 +476,7 @@ def main():
         seed_metro_travels(cur)
         seed_payments(cur)
         seed_feedback(cur)
+        seed_delay_events(cur)  # TASK 6 EXTENSION
         conn.commit()
         print("\nAll done. Database seeded successfully.")
     except Exception as e:

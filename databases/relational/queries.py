@@ -161,7 +161,7 @@ def query_national_rail_fare(
         "fare_class": fare_class,
         "base_fare_usd": base,
         "per_stop_rate_usd": per_stop,
-        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+        "total_fare_usd": round(base + per_stop * int(stops_travelled), 2),
     }
 
 
@@ -222,7 +222,7 @@ def query_metro_fare(schedule_id: str, stops_travelled: int) -> Optional[dict]:
     return {
         "base_fare_usd": base,
         "per_stop_rate_usd": per_stop,
-        "total_fare_usd": round(base + per_stop * stops_travelled, 2),
+        "total_fare_usd": round(base + per_stop * int(stops_travelled), 2),
     }
 
 
@@ -533,7 +533,7 @@ def execute_cancellation(booking_id: str, user_id: str) -> tuple[bool, dict | st
     """
     # Read policy file before opening the DB connection — file I/O inside a
     # transaction holds the connection open unnecessarily and risks timeouts.
-    with open(_POLICY_PATH) as f:
+    with open(_POLICY_PATH, encoding="utf-8") as f:
         policies = json.load(f)
     conn = psycopg2.connect(PG_DSN)
     conn.autocommit = False
@@ -795,3 +795,81 @@ def store_policy_document(
         with conn.cursor() as cur:
             cur.execute(sql, (title, category, content, vec_str, source_file))
             return cur.fetchone()[0]
+
+
+# ── TASK 6 EXTENSION: DELAY EVENT LOGGING ────────────────────────────────────
+
+def log_delay_event(station_id: str, severity: str, description: str) -> int:
+    """
+    Insert a new delay event for a station and return its event_id.
+
+    Args:
+        station_id:   Metro (e.g. MS03) or national rail (e.g. NR02) station ID.
+        severity:     One of 'low', 'medium', 'high'.
+        description:  Human-readable description of the disruption.
+
+    Returns:
+        The new event_id (SERIAL, integer).
+    """
+    # reported_at defaults to NOW() in the schema; we rely on the DB clock
+    # so that all timestamps are consistent even under concurrent inserts.
+    sql = """
+        INSERT INTO delay_events (station_id, severity, description)
+        VALUES (%s, %s, %s)
+        RETURNING event_id
+    """
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (station_id, severity, description))
+            event_id = cur.fetchone()[0]
+        conn.commit()
+    return event_id
+
+
+def get_active_delays(station_id: Optional[str] = None) -> list[dict]:
+    """
+    Return all unresolved delay events, optionally filtered to one station.
+
+    A delay is 'active' when resolved_at IS NULL.  Returning a list rather
+    than a single row lets the agent surface multiple concurrent disruptions
+    in one tool call, avoiding a round-trip per station.
+
+    Args:
+        station_id: Optional filter — pass a station ID to narrow results.
+
+    Returns:
+        List of dicts: event_id, station_id, reported_at, severity, description.
+    """
+    base_sql = """
+        SELECT event_id, station_id, reported_at, severity, description
+        FROM delay_events
+        WHERE resolved_at IS NULL
+    """
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if station_id:
+                cur.execute(base_sql + " AND station_id = %s ORDER BY reported_at DESC", (station_id,))
+            else:
+                cur.execute(base_sql + " ORDER BY reported_at DESC")
+            return [dict(r) for r in cur.fetchall()]
+
+
+def resolve_delay(event_id: int) -> bool:
+    """
+    Mark a delay event as resolved by setting resolved_at to the current time.
+
+    Returns True if a row was updated, False if the event_id does not exist
+    or was already resolved.  The caller can use the return value to detect
+    double-resolution without raising an exception.
+    """
+    sql = """
+        UPDATE delay_events
+        SET resolved_at = NOW()
+        WHERE event_id = %s AND resolved_at IS NULL
+    """
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (int(event_id),))
+            updated = cur.rowcount
+        conn.commit()
+    return updated > 0
