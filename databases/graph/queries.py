@@ -407,7 +407,7 @@ def query_delay_ripple(delayed_station_id: str, hops: int = 2) -> list[dict]:
 
 # ── STATION CONNECTIONS ───────────────────────────────────────────────────────
 
-def query_station_connections(station_id: str) -> list[dict]:
+def query_station_connections(station_id: str) -> dict:
     """
     List all direct connections from a given station.
 
@@ -415,7 +415,7 @@ def query_station_connections(station_id: str) -> list[dict]:
         station_id: e.g. "MS01" or "NR01"
 
     Returns:
-        List of dicts: {station_id, name, line, travel_time_min}
+        Dict: {station_id: <origin>, connections: [{station_id, name, line, travel_time_min}, ...]}
         sorted by travel_time_min ascending
     """
     try:
@@ -433,6 +433,7 @@ def query_station_connections(station_id: str) -> list[dict]:
                     """,
                     station_id=station_id,
                 )
-                return [dict(record) for record in result]
+                connections = [dict(record) for record in result]
+                return {"station_id": station_id, "connections": connections}
     except Exception:
-        return []
+        return {"station_id": station_id, "connections": []}
