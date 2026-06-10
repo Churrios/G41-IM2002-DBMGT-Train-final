@@ -504,12 +504,22 @@ def _execute_tool(
 
         # ── TASK 6 EXTENSION ─────────────────────────────────────────────────
         elif tool_name == "report_delay":
-            event_id = log_delay_event(
-                station_id=params["station_id"],
-                severity=params["severity"],
-                description=params["description"],
-            )
-            result = {"event_id": event_id, "status": "recorded"}
+            _SEVERITY_MAP = {
+                "low": "low", "minor": "low", "slight": "low",
+                "medium": "medium", "moderate": "medium",
+                "high": "high", "serious": "high", "severe": "high", "critical": "high",
+            }
+            raw_sev = params["severity"].strip().lower()
+            severity = _SEVERITY_MAP.get(raw_sev)
+            if severity is None:
+                result = {"error": f"Invalid severity '{params['severity']}'. Use: low, medium, or high."}
+            else:
+                event_id = log_delay_event(
+                    station_id=params["station_id"],
+                    severity=severity,
+                    description=params["description"],
+                )
+                result = {"event_id": event_id, "status": "recorded"}
 
         elif tool_name == "get_active_delays":
             result = get_active_delays(
