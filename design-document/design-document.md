@@ -286,7 +286,7 @@ AI 建議設為 0.3，聲稱這是「語意搜尋的常見起點」。我們將 
 「我們的政策文件從 250 到 2000 字不等。對於使用者詢問具體政策問題的 RAG 系統，應該整份文件 embed 還是切 chunk？請考量我們使用的是 nomic-embed-text（768 維 embedding）的情況說明取捨。」
 
 **結果（Outcome）：**
-AI 建議整份文件 embed：(1) 政策文件是獨立完整的單元——切 chunk 會將條件與定義分開；(2) nomic-embed-text 能良好處理段落長度的輸入。我們採用此建議：`seed_vectors.py` 將 `title + "\n\n" + content` 合為單一字串 embed，每份文件一個向量。於 live testing 中確認正確（C1、C2 均通過 ✅）。
+AI 建議整份文件 embed：(1) 政策文件是獨立完整的單元——切 chunk 會將條件與定義分開；(2) nomic-embed-text 能良好處理段落長度的輸入。我們採用此建議：`seed_vectors.py` 將 `title + "\n\n" + content` 合為單一字串 embed，每份文件一個向量。於 live testing 中確認正確（RAG 相關測試均通過 ✅）。
 
 ---
 
