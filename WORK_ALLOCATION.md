@@ -29,8 +29,8 @@
 | **Task 2d** — Authentication queries (`login_user`, `register_user`, `get_user_secret_question`, `verify_secret_answer`, `update_password`) | 蔡晟郁 | — | `login_user` patched to return `first_name`/`surname` split required by `ui.py` |
 | **Task 3** — PostgreSQL seeding (`seed_postgres.py`) | 黃謙儒 | 蔡晟郁 | 蔡 fixed two bugs post-sync: `seed_seat_layouts` reading `fare_class` from wrong JSON level; `seed_metro_travels` failing on null `stops_travelled` |
 | **Task 4** — Neo4j graph design & seeding (`seed_neo4j.py`, `seed.cypher`) | 黃謙儒 | — | Includes node label redesign (MetroStation/NationalRailStation), relationship type redesign (METRO_LINK/RAIL_LINK/INTERCHANGE_TO), fare attributes on edges |
-| **Task 5** — Neo4j query functions (`graph/queries.py`) | 黃謙儒 | — | Includes C3 duplicate-routes fix (RETURN DISTINCT), C4 interchange-path timeout fix (shortestPath), C5 delay-ripple fix (min(length(path))) |
-| **Task 6** *(if attempted)* — Optional extension | — | — | Not attempted |
+| **Task 5** — Neo4j query functions (`graph/queries.py`) | 黃謙儒 | — | Includes C3 duplicate-routes fix (RETURN DISTINCT), C4 interchange-path timeout fix (shortestPath), C5 delay-ripple fix (min(length(path))), C6 origin-envelope return shape, per-leg `line`/`travel_time_min` in alternative routes (PR #59) |
+| **Task 6** — Delay Event Logging (optional extension) | 蔡晟郁, 黃謙儒 | 蔣耀德 | 蔡晟郁: `delay_events` table + `log_delay_event`/`get_active_delays`/`resolve_delay` queries + seed data (PR #49) + per-file `# TASK 6 EXTENSION:` markers (PR #58). 黃謙儒: wired `report_delay`/`get_active_delays` tools into `agent.py` + made `seed_delay_events` idempotent (PR #55) + severity normalisation guard for LLM-supplied values (PR #59). 蔣耀德: `TASK6.md` + Design Document Section 7 (PR #56) |
 
 ### Design Document
 
@@ -42,7 +42,7 @@
 | Section 4 — Vector / RAG Design | 蔣耀德 | — | |
 | Section 5 — AI Tool Usage Evidence | 蔡晟郁 | 黃謙儒, 蔣耀德 | All three contributed examples drawn from actual development events |
 | Section 6 — Reflection & Trade-offs | 蔡晟郁 | 黃謙儒, 蔣耀德 | All three contributed |
-| Section 7 — Optional Extension *(if applicable)* | — | — | Not applicable |
+| Section 7 — Optional Extension (Delay Event Logging) | 蔣耀德 | 黃謙儒 | Documents the Task 6 delay-event extension (motivation, schema snippet, example queries) — PR #56. §7.4 testing evidence (chatbot screenshots with debug panel) contributed by 黃謙儒 |
 
 ---
 
