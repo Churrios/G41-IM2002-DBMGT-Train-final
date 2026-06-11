@@ -20,13 +20,13 @@
 | 實體 | 主鍵（PK） | 主要外鍵（FK） | 代表性欄位 |
 |------|-----------|--------------|-----------|
 | `registered_users` | `user_id` | — | `email`、`password`、`is_active` |
-| `metro_stations` | `station_id` | `interchange_nr_station_id → national_rail_stations` | `name`、`lines`、`zone` |
-| `national_rail_stations` | `station_id` | `interchange_metro_station_id → metro_stations` | `name`、`managed_by` |
+| `metro_stations` | `station_id` | `interchange_nr_station_id → national_rail_stations` | `name`、`lines`、`is_interchange_metro` |
+| `national_rail_stations` | `station_id` | `interchange_metro_station_id → metro_stations` | `name`、`lines`、`is_interchange_metro` |
 | `metro_schedules` | `schedule_id` | `origin_station_id`、`destination_station_id → metro_stations` | `line`、`frequency_min`、`base_fare_usd` |
 | `metro_schedule_stops` | `(schedule_id, stop_order)` | `schedule_id → metro_schedules`、`station_id → metro_stations` | `stop_order` |
 | `national_rail_schedules` | `schedule_id` | `origin_station_id`、`destination_station_id → national_rail_stations` | `line`、`service_type`、`std_base_fare_usd` |
 | `national_rail_schedule_stops` | `(schedule_id, stop_order)` | `schedule_id → national_rail_schedules`、`station_id → national_rail_stations` | `stop_order` |
-| `seat_layouts` | `(schedule_id, seat_id)` | `schedule_id → national_rail_schedules` | `coach`、`row`、`column`、`fare_class` |
+| `seat_layouts` | `(schedule_id, seat_id)` | `schedule_id → national_rail_schedules` | `coach`、`row_num`、`col_char`、`fare_class` |
 | `bookings` | `booking_id` | `user_id → registered_users`、`schedule_id → national_rail_schedules` | `travel_date`、`seat_id`、`status` |
 | `metro_travel_history` | `trip_id` | `user_id → registered_users`、`schedule_id → metro_schedules` | `travel_date`、`amount_usd`、`status` |
 | `payments` | `payment_id` | `booking_id`（無 FK：雙參照 BK.../MT...） | `amount_usd`、`method`、`status` |
