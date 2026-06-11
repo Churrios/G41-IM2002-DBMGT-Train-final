@@ -193,9 +193,9 @@
 
 | 狀態 | 項目 |
 |------|------|
-| 🔴 | `schema.sql`：新增 `delay_events` 表（event_id, station_id, reported_at, severity, description, resolved_at）+ FK + ON DELETE + `# TASK 6 EXTENSION:` comment |
-| 🔴 | `relational/queries.py`：實作 `log_delay_event()`、`get_active_delays()`、`resolve_delay()` + WHY comment + `# TASK 6 EXTENSION:` comment |
-| 🔴 | `seed_postgres.py`：seed 3–5 筆 delay_events 範例資料（含不同 severity）+ `# TASK 6 EXTENSION:` comment |
+| ✅ | `schema.sql`：新增 `delay_events` 表（event_id, station_id, reported_at, severity, description, resolved_at）+ FK + ON DELETE + `# TASK 6 EXTENSION:` comment |
+| ✅ | `relational/queries.py`：實作 `log_delay_event()`、`get_active_delays()`、`resolve_delay()` + WHY comment + `# TASK 6 EXTENSION:` comment |
+| ✅ | `seed_postgres.py`：seed 3–5 筆 delay_events 範例資料（含不同 severity）+ `# TASK 6 EXTENSION:` comment |
 
 ### 🟢 黃謙儒（Agent 接入 + 測試）
 
