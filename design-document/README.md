@@ -12,7 +12,9 @@
 | Section 4 — Vector / RAG Design | 蔣耀德 | `section4-vector-rag.md` |
 | Section 5 — AI Tool Usage Evidence | 三人共同 | `section5-ai-usage.md` |
 | Section 6 — Reflection & Trade-offs | 三人共同 | `section6-reflection.md` |
+| Section 7 — Optional Extension（Task 6 Delay Event Logging）| 蔣耀德（7.4 測試截圖：黃謙儒）| 僅在合併檔（含 `live-demo/` 截圖）|
 
 ## 提交方式
 
-繳交前將六個 section 合併為單一 PDF 或 Markdown，繳交至 EEClass。
+**繳交版本 = 本資料夾的合併檔 [`design-document.md`](design-document.md)（Section 1–7 全部章節，以此為準）**，連同 `er-diagram.png/pdf` 與 `live-demo/` 截圖繳交至 EEClass。
+各 `sectionN-*.md` 為撰寫期草稿，內容若與合併檔不一致，以合併檔為準。

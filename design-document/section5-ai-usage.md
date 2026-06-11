@@ -20,16 +20,16 @@ AI recommended bidirectional nullable FK columns: `metro_stations.interchange_nr
 
 ---
 
-## Example 2 — C3 Alternative Routes Deduplication
+## Example 2 — Separating Database Correctness from LLM Behaviour in End-to-End Testing
 
 **Context:**
-`query_alternative_routes` was returning duplicate route arrays — different Cypher path objects that represented the same station sequence but had different internal identities. The grading guide required returning distinct routes, so deduplication by content (not object identity) was needed.
+During end-to-end testing through the chatbot, several answers were wrong — the assistant claimed a station had no connections (C6), and once reported a booking as confirmed that did not exist in the database. We could not tell whether the database query functions were buggy or the LLM layer was misbehaving, and fixing the wrong layer would have wasted the time remaining before submission.
 
 **Prompt:**
-"My Cypher query uses `MATCH p = (o)-[...]->(d)` and returns multiple paths. Many results have the same station sequence but different object identities, so `DISTINCT p` does not remove them. How can I deduplicate by actual station ID sequence?"
+"Our chatbot gives wrong answers but we don't know whether the bug is in the database query functions or in the LLM layer. Design a test strategy that separates program correctness from LLM behaviour, and generate a direct-call test suite covering every graph, relational, and Task 6 function without polluting the seeded data."
 
 **Outcome:**
-AI suggested extracting an explicit list from the path using `[n IN nodes(p) | n.station_id]` into a named variable (`WITH [...] AS route`), then applying `RETURN DISTINCT route, total_time_min`. Because `route` is a plain list of strings, `DISTINCT` compares by value and correctly collapses duplicates. This fix was committed in PR #30 and verified by calling `query_alternative_routes("MS01", "MS09", avoid_station_id="MS07", max_routes=3)`, which returned 3 distinct routes with no duplicates.
+AI proposed a dual-track method: a 49-assertion direct-call smoke suite exercising every query function against the live databases, run alongside scripted chatbot sessions, with every chatbot claim cross-checked by querying the database directly. Direct calls passed while the chatbot failed the same scenarios, proving the defects were LLM-side, which led to three targeted fixes (PR #59): wrapping `query_station_connections` output in a `{station_id, connections}` envelope so the answer LLM stops misattributing neighbours; normalising LLM-supplied severity words ("serious" → high) before they hit the `delay_events` CHECK constraint; and documenting that the single-turn agent cannot chain `get_available_seats` → `make_booking` (the "any seat" booking hallucination — the LLM fabricated a booking ID that direct DB queries proved absent). The AI-generated suite itself needed one correction before it could be trusted: it crashed on Windows' cp950 console when printing emoji status marks, fixed with `sys.stdout.reconfigure(encoding="utf-8")`.
 
 ---
 
@@ -68,4 +68,4 @@ Policy documents in `data/policies/` range from ~250 words (short rule summaries
 "Our policy documents vary from 250 to 2 000 words. For a RAG system where users ask specific policy questions, should we embed whole documents or chunk them? What are the trade-offs given that we are using nomic-embed-text (768-dimensional embeddings)?"
 
 **Outcome:**
-AI recommended embedding whole documents for this use case, with two justifications: (1) policy documents are self-contained conceptual units — chunking would separate conditions from their definitions and degrade retrieval quality; (2) nomic-embed-text handles paragraph-length inputs well and produces meaningful document-level representations. It noted chunking would be more appropriate for long narrative documents (e.g., Wikipedia articles) where different sections answer different questions. We adopted this approach: `seed_vectors.py` embeds `title + "\n\n" + content` as a single string per document. Retrieval quality was confirmed during live testing (C1, C2 both ✅).
+AI recommended embedding whole documents for this use case, with two justifications: (1) policy documents are self-contained conceptual units — chunking would separate conditions from their definitions and degrade retrieval quality; (2) nomic-embed-text handles paragraph-length inputs well and produces meaningful document-level representations. We did **not** adopt this fully: the longest policy documents exceed 2,000 words, and embedding each as a single vector dilutes its semantic focus. `seed_vectors.py` instead chunks content with `chunk_text()` (300 characters per chunk, 50-character overlap between adjacent chunks) and embeds each chunk separately — 101 chunks in `policy_documents` after seeding. The 50-character overlap addresses exactly the risk the AI raised: conditions split from their definitions at a chunk boundary retain context inside the overlap. Retrieval quality was confirmed during live testing via RAG policy questions (R1 delay-refund and R2 bicycle policy both passed, with answers grounded in the retrieved chunks rather than model generation).
