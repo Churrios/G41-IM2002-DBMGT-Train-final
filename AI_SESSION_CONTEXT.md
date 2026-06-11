@@ -1,7 +1,5 @@
 # ✅ AI Session Context — TransitFlow
 
-> **⚠️ Historical snapshot notice (2026-06-11):** This file is a development-era AI context snapshot (last substantially updated 2026-06-04) and is **no longer kept in sync** with the codebase. Notably, the schema section predates the junction-table refactor (PR #34) and the Task 6 `delay_events` extension. The authoritative sources are `databases/relational/schema.sql` (schema), `databases/relational/queries.py` / `databases/graph/queries.py` (function signatures), and `skeleton/seed_postgres.py` (seeding order).
-
 **How to use this file:**
 At the start of every AI coding session, paste the full contents of this file as your first message to your AI assistant. This gives the AI the context it needs to produce code that fits your codebase and is consistent with your teammates' work.
 

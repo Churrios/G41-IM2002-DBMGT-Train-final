@@ -4,7 +4,7 @@
 > 環境：本機 Windows 10 Pro（MSI GL65 Leopard 10SFK, i7-10750H, 16GB RAM）/ PowerShell + Docker Desktop(WSL2)
 > LLM：先 **Ollama (llama3.2:1b + nomic-embed-text)**，後 **Gemini (gemini-3.1-flash-lite + gemini-embedding-001, 3072 維)**
 > 測試者：黃謙儒（Chien，Graph DB Engineer）
-> 性質：這份是「**怎麼一步一步測的**」流程＋踩坑紀錄；最終結果與問題彙整見 [local-testing-results-chien.md](2-local-testing-results-chien.md)。
+> 性質：這份是「**怎麼一步一步測的**」流程＋踩坑紀錄；最終結果與問題彙整見 [local-testing-results-chien.md](local-testing-results-chien.md)。
 
 ---
 

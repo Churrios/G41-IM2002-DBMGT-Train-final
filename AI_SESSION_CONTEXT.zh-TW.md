@@ -1,7 +1,5 @@
 # ✅ AI Session Context — TransitFlow
 
-> **⚠️ 歷史快照聲明（2026-06-11）：** 本檔為開發期的 AI context 快照（實質更新至 2026-06-04），**已不再與 codebase 同步**。特別注意：schema 區段早於 junction table 重構（PR #34）與 Task 6 `delay_events` 擴充。最終版本以 `databases/relational/schema.sql`（schema）、`databases/relational/queries.py` / `databases/graph/queries.py`（函式簽名）、`skeleton/seed_postgres.py`（seeding 順序）為準。
-
 **如何使用這個檔案：**
 每次開始 AI coding session 時，把這個檔案的完整內容作為第一則訊息貼給你的 AI assistant。這會提供 AI 所需的 context，讓它產生符合你 codebase、且與隊友工作一致的程式碼。
 
