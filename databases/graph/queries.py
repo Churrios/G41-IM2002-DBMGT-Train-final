@@ -226,9 +226,10 @@ def query_alternative_routes(
                               (d {station_id: $dest_id})
                     WHERE NONE(n IN nodes(p) WHERE n.station_id = $avoid_station_id)
                     WITH [n IN nodes(p) | {station_id: n.station_id, name: n.name}] AS route,
+                         [r IN relationships(p) | {line: r.line, travel_time_min: r.travel_time_min}] AS legs,
                          reduce(t = 0, r IN relationships(p) | t + r.travel_time_min)
                              AS total_time_min
-                    RETURN DISTINCT route, total_time_min
+                    RETURN DISTINCT route, legs, total_time_min
                     ORDER BY total_time_min
                     LIMIT $max_routes
                     """,
@@ -238,7 +239,11 @@ def query_alternative_routes(
                     max_routes=max_routes,
                 )
                 return [
-                    {"route": list(record["route"]), "total_time_min": record["total_time_min"]}
+                    {
+                        "route": list(record["route"]),
+                        "legs": list(record["legs"]),
+                        "total_time_min": record["total_time_min"],
+                    }
                     for record in result
                 ]
     except Exception:
@@ -407,7 +412,7 @@ def query_delay_ripple(delayed_station_id: str, hops: int = 2) -> list[dict]:
 
 # ── STATION CONNECTIONS ───────────────────────────────────────────────────────
 
-def query_station_connections(station_id: str) -> list[dict]:
+def query_station_connections(station_id: str) -> dict:
     """
     List all direct connections from a given station.
 
@@ -415,7 +420,7 @@ def query_station_connections(station_id: str) -> list[dict]:
         station_id: e.g. "MS01" or "NR01"
 
     Returns:
-        List of dicts: {station_id, name, line, travel_time_min}
+        Dict: {station_id: <origin>, connections: [{station_id, name, line, travel_time_min}, ...]}
         sorted by travel_time_min ascending
     """
     try:
@@ -433,6 +438,7 @@ def query_station_connections(station_id: str) -> list[dict]:
                     """,
                     station_id=station_id,
                 )
-                return [dict(record) for record in result]
+                connections = [dict(record) for record in result]
+                return {"station_id": station_id, "connections": connections}
     except Exception:
-        return []
+        return {"station_id": station_id, "connections": []}
