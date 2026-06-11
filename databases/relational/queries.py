@@ -109,8 +109,9 @@ def query_national_rail_availability(
                      ON o_stop.schedule_id = s.schedule_id AND o_stop.station_id = %s
                 JOIN national_rail_schedule_stops d_stop
                      ON d_stop.schedule_id = s.schedule_id AND d_stop.station_id = %s
-                -- travel_date = NULL makes the join condition always FALSE (SQL 3-value logic),
-                -- so booked_seats = 0 and available_seats = total capacity when date is omitted.
+                -- When travel_date is omitted (NULL), the %s IS NULL guard makes the date
+                -- filter pass for every row, so booked_seats counts non-cancelled bookings
+                -- across ALL dates (an aggregate occupancy view rather than a per-date one).
                 LEFT JOIN bookings b ON b.schedule_id = s.schedule_id
                                     AND (%s IS NULL OR b.travel_date = %s)
                                     AND b.status != 'cancelled'

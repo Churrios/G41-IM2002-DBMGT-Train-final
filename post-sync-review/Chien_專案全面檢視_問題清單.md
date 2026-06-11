@@ -113,7 +113,7 @@ return prof
 ## 2. 黃謙儒 / Chien（Graph DB Engineer）
 
 > 檔案：`databases/graph/queries.py`、`skeleton/seed_neo4j.py`、`databases/graph/seed.cypher`
-> 詳細實作步驟見 [Chien_graph_正式開發流程.md](Chien_graph_正式開發流程.md)（Q1=A 已鎖定）
+> 詳細實作步驟見 Chien_graph_正式開發流程.md（個人資料夾，未入庫）（Q1=A 已鎖定）
 
 ### ✅ C1 — Graph schema 命名與評分標準相反（核心重寫）
 **檔案**：[skeleton/seed_neo4j.py](../skeleton/seed_neo4j.py)、[databases/graph/queries.py](../databases/graph/queries.py)、[databases/graph/seed.cypher](../databases/graph/seed.cypher)
