@@ -40,8 +40,8 @@
 | Section 2 — Normalisation Justification | 蔡晟郁 | — | |
 | Section 3 — Graph Database Design Rationale | 黃謙儒 | — | |
 | Section 4 — Vector / RAG Design | 蔣耀德 | — | |
-| Section 5 — AI Tool Usage Evidence | 蔡晟郁 | 黃謙儒, 蔣耀德 | All three contributed examples drawn from actual development events |
-| Section 6 — Reflection & Trade-offs | 蔡晟郁 | 黃謙儒, 蔣耀德 | All three contributed |
+| Section 5 — AI Tool Usage Evidence | 蔡晟郁 | 黃謙儒, 蔣耀德 | 蔡晟郁 drafted and assembled all five examples. 黃謙儒 rewrote Example 2 (dual-track direct-call vs. chatbot test methodology, from live testing) and corrected Example 5's outcome to match the actual `chunk_text()` implementation; Example 3 documents 黃's C4 fix. 蔣耀德's vector work is the source material for Examples 4–5 |
+| Section 6 — Reflection & Trade-offs | 蔡晟郁 | 黃謙儒, 蔣耀德 | 蔡晟郁 drafted both design decisions and §6.2. 黃謙儒 rewrote Decision 2 with dual-provider (Ollama vs. Gemini) test results and added §6.2 item 3 (defensive input validation for LLM callers) from live-testing findings. §6.2 item 1 (embedding dimension lock-in) draws on 蔣耀德's vector pipeline |
 | Section 7 — Optional Extension (Delay Event Logging) | 蔣耀德 | 黃謙儒 | Documents the Task 6 delay-event extension (motivation, schema snippet, example queries) — PR #56. §7.4 testing evidence (chatbot screenshots with debug panel) contributed by 黃謙儒 |
 
 ---
