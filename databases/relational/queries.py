@@ -1,3 +1,4 @@
+# TASK 6 EXTENSION: log_delay_event(), get_active_delays(), resolve_delay() (see line 800+)
 """
 TransitFlow — PostgreSQL / Relational Database Layer
 =====================================================

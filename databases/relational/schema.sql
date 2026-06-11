@@ -1,3 +1,4 @@
+-- TASK 6 EXTENSION: delay_events table, idx_delay_events_active index (see line 280+)
 -- ============================================================
 --  TransitFlow PostgreSQL Schema
 --  Seed data is loaded separately by: python skeleton/seed_postgres.py
